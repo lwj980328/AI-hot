@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 class ResearchAgent:
     """研究Agent - 负责资料采集
 
+    职责：
+    - 读取 state.research 和 state.context
+    - 输出 state.research.papers, state.research.repositories, state.research.models
+    - Deep Research 时读取 information_gaps 执行补充研究
+
     M1阶段：通过LLM模拟生成研究数据
     M4阶段：接入ToolRegistry调用真实工具
     """
@@ -20,9 +25,27 @@ class ResearchAgent:
     async def run(self, state: AgentState) -> AgentState:
         """执行研究任务"""
         state.status = TaskStatus.RESEARCHING
+        state.research.search_round += 1
         topic = state.research.topic or state.user_query
 
+        # 构建上下文摘要
+        context_summary = "\n".join(
+            f"- [{c.item_type}] {c.title}: {c.content}"
+            for c in state.context.context_items
+        ) if state.context.context_items else "无"
+
+        # Deep Research：如果有信息缺口，针对性补充
+        gaps_summary = ""
+        if state.research.information_gaps:
+            gaps_summary = "\n\n## 需要重点补充的信息\n" + "\n".join(
+                f"- {gap}" for gap in state.research.information_gaps
+            )
+
         prompt = f"""你是一位AI研究助手。请针对主题"{topic}"生成模拟的研究数据。
+
+## 上下文信息
+{context_summary}
+{gaps_summary}
 
 请返回JSON格式，包含以下内容：
 {{
@@ -50,7 +73,8 @@ class ResearchAgent:
 1. 生成3篇论文
 2. 生成3个代码仓库
 3. 内容要符合主题，看起来真实可信
-4. 只返回JSON，不要其他文字"""
+4. 如果有"需要重点补充的信息"，请针对性生成相关数据
+5. 只返回JSON，不要其他文字"""
 
         try:
             data = await self.llm_service.chat_json(prompt)

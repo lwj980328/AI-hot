@@ -6,7 +6,12 @@ logger = logging.getLogger(__name__)
 
 
 class ReportAgent:
-    """报告Agent - 负责生成研究报告"""
+    """报告Agent - 负责生成研究报告
+
+    职责：
+    - 读取 state.research, state.context, state.analysis
+    - 输出 state.report（title, summary, markdown_content）
+    """
 
     def __init__(self, llm_service: LLMService | None = None):
         self.llm_service = llm_service or LLMService()
@@ -15,6 +20,7 @@ class ReportAgent:
         """生成研究报告"""
         state.status = TaskStatus.REPORTING
 
+        # 构建研究数据摘要
         papers_summary = "\n".join(
             f"- {p.title}: {p.summary}" for p in state.research.papers
         )
@@ -22,7 +28,22 @@ class ReportAgent:
             f"- {r.title} ({r.stars}⭐): {r.summary}" for r in state.research.repositories
         )
 
-        prompt = f"""你是一位AI研究报告撰写专家。请基于以下研究数据生成一份专业的研究报告。
+        # 构建上下文摘要
+        context_summary = "\n".join(
+            f"- [{c.item_type}] {c.title}: {c.content}"
+            for c in state.context.context_items
+        ) if state.context.context_items else "无"
+
+        # 构建分析结果摘要
+        insights_summary = "\n".join(
+            f"- {ins.title}: {ins.description}"
+            for ins in state.analysis.insights
+        ) if state.analysis.insights else "无"
+
+        hot_topics = ", ".join(state.analysis.hot_topics) if state.analysis.hot_topics else "无"
+        trend_summary = state.analysis.trend_summary or "无"
+
+        prompt = f"""你是一位AI研究报告撰写专家。请基于以下研究数据和分析结果生成一份专业的研究报告。
 
 ## 研究主题
 {state.research.topic or state.user_query}
@@ -30,17 +51,30 @@ class ReportAgent:
 ## 关键词
 {', '.join(state.research.keywords)}
 
+## 上下文信息
+{context_summary}
+
 ## 研究论文
 {papers_summary}
 
 ## 相关项目
 {repos_summary}
 
+## 分析结果
+### 热点话题
+{hot_topics}
+
+### 趋势分析
+{trend_summary}
+
+### 核心洞察
+{insights_summary}
+
 请生成一份Markdown格式的研究报告，包含以下部分：
 1. 标题
 2. 执行摘要（100字以内）
 3. 研究背景
-4. 核心发现
+4. 核心发现（基于分析洞察）
 5. 技术趋势分析
 6. 代表性项目/论文介绍
 7. 未来展望
@@ -79,6 +113,13 @@ class ReportAgent:
             f"### {r.title}\n{r.summary}\nStars: {r.stars}\n" for r in state.research.repositories
         )
 
+        # 分析结果
+        insights_section = "\n".join(
+            f"- **{ins.title}**: {ins.description}" for ins in state.analysis.insights
+        ) if state.analysis.insights else "暂无"
+        hot_topics = ", ".join(state.analysis.hot_topics) if state.analysis.hot_topics else "暂无"
+        trend = state.analysis.trend_summary or f"{topic}领域正在快速发展。"
+
         return f"""# {topic}研究报告
 
 ## 执行摘要
@@ -88,6 +129,18 @@ class ReportAgent:
 ## 研究背景
 
 {topic}是当前AI领域的研究热点之一，受到了学术界和工业界的广泛关注。
+
+## 热点话题
+
+{hot_topics}
+
+## 趋势分析
+
+{trend}
+
+## 核心洞察
+
+{insights_section}
 
 ## 代表性论文
 

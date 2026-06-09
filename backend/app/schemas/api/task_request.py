@@ -1,9 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CreateTaskRequest(BaseModel):
     """创建任务请求"""
-    task_name: str
+    task_name: str | None = Field(default=None, description="任务名称，未提供时使用 user_query")
     user_query: str
 
 

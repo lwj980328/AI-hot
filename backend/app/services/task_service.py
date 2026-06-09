@@ -13,8 +13,9 @@ class TaskService:
     def __init__(self, session: AsyncSession):
         self.repo = TaskRepository(session)
 
-    async def create_task(self, task_name: str, user_query: str) -> TaskDTO:
+    async def create_task(self, user_query: str, task_name: str | None = None) -> TaskDTO:
         """创建研究任务"""
+        task_name = task_name or user_query
         logger.info(f"创建任务: {task_name}")
         task = await self.repo.create(
             task_name=task_name,

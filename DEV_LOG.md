@@ -67,3 +67,94 @@
   1. 将 `graph.py` 中的模块级 Agent 实例化改为延迟初始化
   2. 考虑 PlannerAgent 的输入输出接口设计
   3. 为 ContextAgent 预留 MemoryService 接口（M3 才实现）
+
+---
+
+## Milestone 2: 多Agent工作流
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-09
+
+### 1. 核心产出 (What was done)
+* **PlannerAgent**: 读取 `user_query`，输出 `research.topic`、`research.keywords`、`research.data_sources`
+* **ContextAgent**: 读取 `research.topic`，输出 `context.context_items`（M2 阶段通过 LLM 生成领域背景，M3 接入 MemoryService）
+* **AnalysisAgent**: 读取 `research` + `context`，输出 `analysis.hot_topics`、`analysis.trend_summary`、`analysis.insights`，同时判断 `need_more_data` 和 `information_gaps`
+* **五节点 LangGraph 工作流**: 实现 `START → Planner → Context → Research → Analysis → Report → END`
+* **Deep Research 回环**: 条件边 `continue_research` 根据 `need_more_data` 决定回到 Research 或继续到 Report，最多 `MAX_RESEARCH_ROUNDS = 3` 轮
+* **延迟导入机制**: `_get_agents()` 函数解决 `app.agents ↔ app.workflows` 循环依赖
+* **端到端验证通过**: 输入"MCP生态发展趋势"，完整执行五个节点，输出 2225 字符研究报告
+
+### 2. 踩坑与返工记录 (Mistakes & Rework - 核心反思)
+
+**踩坑 1: 循环导入 (app.agents ↔ app.workflows)**
+* **问题描述**: `app.agents.__init__` → `planner_agent` → `app.services` → `workflow_service` → `graph.py` → `app.agents.planner_agent` 形成环路，启动报 `ImportError: cannot import name 'PlannerAgent' from partially initialized module`
+* **根本原因**: `graph.py` 在模块顶层 `from app.agents.planner_agent import PlannerAgent`，而 `app.agents.__init__` 尚未初始化完成
+* **最终解法**: `graph.py` 中使用 `_get_agents()` 延迟导入，不在模块顶层 import Agent
+
+**踩坑 2: search_round 递增位置错误**
+* **问题描述**: 代码审查发现 `search_round += 1` 写在 `graph.py` 的 `research_node` 中，而非 `ResearchAgent.run()` 内部
+* **根本原因**: 混淆了"工作流控制逻辑"和"研究状态管理"的边界。`search_round` 属于 `ResearchState`，其递增是研究状态管理的一部分
+* **最终解法**: 将 `search_round += 1` 移到 `ResearchAgent.run()` 内部，`graph.py` 只保留轮次上限检查
+
+**踩坑 3: API 请求模型 task_name 必填**
+* **问题描述**: 用户在 PowerShell 测试时只传 `{"user_query": "MCP生态发展趋势"}`，返回 422 错误 `"Field required: task_name"`
+* **根本原因**: `CreateTaskRequest` 中 `task_name: str` 定义为必填字段，但对用户来说这是冗余信息
+* **最终解法**: 改为 `task_name: str | None = None`，`TaskService.create_task()` 中 `task_name = task_name or user_query`
+
+**踩坑 4: 条件边返回值与设计规范不一致**
+* **问题描述**: 代码审查发现条件边返回 `"report"`，而 `04_Workflow设计规范.md` 第 5 节定义应返回 `"memory"`
+* **根本原因**: M2 跳过 Memory 节点，直接返回了最终目标节点名称
+* **最终解法**: 条件边返回 `"memory"`，图中 `"memory"` 映射到 `"report"`，M3 插入 MemoryNode 后映射自然生效
+
+**踩坑 5: Agent 未读取完整状态域**
+* **问题描述**: 代码审查发现 ResearchAgent 未读取 `state.context` 和 `information_gaps`，ReportAgent 未读取 `state.context` 和 `state.analysis`
+* **根本原因**: 实现时只关注了核心功能，忽略了设计规范中定义的完整输入
+* **最终解法**: 修改 prompt 构建逻辑，加入上下文摘要、信息缺口、分析结果
+
+**踩坑 6: WorkflowManager.run() 接口签名不符**
+* **问题描述**: 代码审查发现 `run(initial_state: AgentState)` 与 `10_WorkflowManager设计.md` 定义的 `run(task_id: str)` 不一致
+* **根本原因**: M1 实现时由 WorkflowService 构建 AgentState 后传入，跳过了 Manager 内部构建
+* **最终解法**: 改为 `run(task_id: str, user_query: str)`，Manager 内部构建 AgentState
+
+### 3. 架构妥协 (Technical Debt)
+* **ContextAgent 未接入 Memory**: M2 阶段通过 LLM 生成领域背景上下文，M3 必须替换为 `MemoryService.recall()`
+* **ResearchAgent 仍使用 LLM 模拟数据**: 未接入真实工具（ArxivTool、GithubTool），M4 阶段必须替换
+* **error_handler.py 冗余**: 按设计规范创建了统一错误处理节点，但 LangGraph 节点异常会直接中断图执行，无法自动路由到错误处理节点。实际采用每个节点内部 try/except 的方式，error_handler.py 已删除
+* **状态字符串硬编码未修复**: WorkflowService 中仍使用 `"running"`、`"completed"` 等字符串而非 TaskStatus 枚举（M1 遗留）
+* **Session 管理未修复**: `get_db_session()` 在退出时自动 commit，绕过了 Service 层控制事务的规范（M1 遗留）
+* **MAX_RESEARCH_ROUNDS 重复定义**: `graph.py` 和 `AnalysisAgent` 各自定义了 `MAX_RESEARCH_ROUNDS = 3`，应统一为配置常量
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了两轮代码审核，发现并修复了以下问题：
+
+* **第一轮审核** (3 个问题):
+  1. `search_round` 递增在 graph.py 而非 ResearchAgent → 已修复
+  2. 计划文档 ASCII 图包含 Memory 节点但实际未实现 → 文档错误，代码正确
+  3. 对照 M1 教训检查 → 未犯同样错误
+
+* **第二轮审核** (4 个违规):
+  1. ResearchAgent 未读取 `state.context` 和 `information_gaps` → 已修复
+  2. ReportAgent 未读取 `state.context` 和 `state.analysis` → 已修复
+  3. 条件边返回 `"report"` 而非 `"memory"` → 已修复
+  4. `WorkflowManager.run()` 参数类型不符 → 已修复
+
+* **第三轮审核** (完整调用链):
+  - 覆盖 API → Service → Manager → Graph → Agent → 状态模型 → 数据库
+  - 未发现新违规项
+
+* **教训**: 审核范围应覆盖完整调用链（包括 API 层），不能只审核 M2 新增/修改的文件
+
+### 5. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: 代码审核必须覆盖完整调用链（API → Service → Manager → Graph → Agent），不能只审核当前 Milestone 新增的文件
+* **防错规则 2**: Agent 的 `run()` 方法必须按照 `02_Agent设计规范.md` 中的"Agent与State映射表"读取所有规定的状态域，不能遗漏
+* **防错规则 3**: 条件边返回值必须与 `04_Workflow设计规范.md` 一致（返回 `"memory"` 而非最终目标节点名称），通过图映射控制实际流转
+* **防错规则 4**: API 请求模型中的可选字段应有合理默认值，不能依赖用户必填
+* **架构红线 1**: `graph.py` 中禁止模块级 import Agent，必须使用延迟导入避免循环依赖
+* **架构红线 2**: `search_round` 等研究状态管理逻辑必须在 Agent 内部，graph.py 节点函数只做工作流控制（轮次上限检查）
+* **衔接提醒**: 进入 M3 记忆系统前，需要：
+  1. ContextAgent 的 LLM 生成上下文替换为 `MemoryService.recall()`
+  2. 新增 MemoryAgent 写入研究记忆、趋势快照、洞察
+  3. 条件边映射从 `{"memory": "report"}` 改为 `{"memory": "memory"}`
+  4. 统一 `MAX_RESEARCH_ROUNDS` 为配置常量
+  5. 修复 M1 遗留：状态字符串硬编码、Session 管理

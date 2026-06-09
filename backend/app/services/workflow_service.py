@@ -5,7 +5,6 @@ from app.repositories.workflow_run_repo import WorkflowRunRepository
 from app.repositories.report_repo import ReportRepository
 from app.services.dto.task_dto import WorkflowRunDTO
 from app.services.exceptions import NotFoundError, WorkflowError
-from app.schemas.state.agent_state import AgentState
 from app.workflows.research.manager import ResearchWorkflowManager
 
 logger = logging.getLogger(__name__)
@@ -38,18 +37,12 @@ class WorkflowService:
         # 3. 更新任务状态
         await self.task_repo.update_status(task_id, "running")
 
-        # 4. 构建初始状态
-        initial_state = AgentState(
-            task_id=task_id,
-            user_query=task.user_query,
-        )
-
-        # 5. 执行工作流
+        # 4. 执行工作流（task_id 和 user_query 由 Manager 内部构建 AgentState）
         try:
             manager = ResearchWorkflowManager()
-            final_state = await manager.run(initial_state)
+            final_state = await manager.run(task_id, task.user_query)
 
-            # 6. 保存报告
+            # 5. 保存报告
             await self.report_repo.create(
                 task_id=task_id,
                 title=final_state.report.title,
@@ -57,7 +50,7 @@ class WorkflowService:
                 markdown_content=final_state.report.markdown_content,
             )
 
-            # 7. 更新状态
+            # 6. 更新状态
             await self.run_repo.finish_run(run.id)
             await self.task_repo.update_status(task_id, "completed")
 
