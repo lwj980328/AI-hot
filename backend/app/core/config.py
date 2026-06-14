@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
 
+    # Qdrant
+    qdrant_host: str = "localhost"
+    qdrant_port: int = 6333
+
+    # Embedding (本地模型，首次运行自动下载约100MB)
+    embedding_model: str = "BAAI/bge-small-zh-v1.5"
+    embedding_dimension: int = 512
+    embedding_cache_dir: str = "./models"
+    hf_endpoint: str = "https://hf-mirror.com"
+
     # App
     app_env: str = "development"
     app_debug: bool = True

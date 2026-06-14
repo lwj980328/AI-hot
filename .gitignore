@@ -35,5 +35,8 @@ build/
 *.db
 *.sqlite3
 
+# ML Models (embedding模型缓存，约100MB)
+backend/models/
+
 # Report output
 report_*.md

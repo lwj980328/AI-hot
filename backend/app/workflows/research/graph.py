@@ -1,3 +1,22 @@
+"""研究工作流图定义
+
+结构（M3）：
+    START → Planner → Context → Research → Analysis
+                                          ↓
+                                    continue_research (条件边)
+                                     ↙        ↘
+                                Research      Memory → Report → END
+                                (回环)
+
+Deep Research 回环：
+    Analysis 发现信息不足时，回到 Research 补充数据，
+    最多循环 MAX_RESEARCH_ROUNDS 轮。
+
+M3 变更：
+    - 新增 memory_node（调用 MemoryAgent 写入长期记忆）
+    - 条件边 "memory" 从直接映射 report 改为映射 memory_node
+"""
+
 import logging
 from datetime import datetime
 from langgraph.graph import StateGraph, START, END
@@ -13,22 +32,34 @@ MAX_RESEARCH_ROUNDS = 3
 # 延迟导入 Agent（避免循环依赖）
 # ============================================================
 
+_AGENTS_CACHE: dict[str, object] | None = None
+
 
 def _get_agents():
-    """延迟导入所有 Agent，避免 app.agents ↔ app.workflows 循环导入"""
+    """延迟导入所有 Agent，避免 app.agents ↔ app.workflows 循环导入
+
+    使用模块级缓存，只在首次调用时创建实例，后续复用。
+    """
+    global _AGENTS_CACHE
+    if _AGENTS_CACHE is not None:
+        return _AGENTS_CACHE
+
     from app.agents.planner_agent import PlannerAgent
     from app.agents.context_agent import ContextAgent
     from app.agents.research_agent import ResearchAgent
     from app.agents.analysis_agent import AnalysisAgent
+    from app.agents.memory_agent import MemoryAgent
     from app.agents.report_agent import ReportAgent
 
-    return {
+    _AGENTS_CACHE = {
         "planner": PlannerAgent(),
         "context": ContextAgent(),
         "research": ResearchAgent(),
         "analysis": AnalysisAgent(),
+        "memory": MemoryAgent(),
         "report": ReportAgent(),
     }
+    return _AGENTS_CACHE
 
 
 # ============================================================
@@ -57,7 +88,10 @@ async def planner_node(state: dict) -> dict:
 
 
 async def context_node(state: dict) -> dict:
-    """上下文节点：构建研究所需上下文"""
+    """上下文节点：构建研究所需上下文
+
+    M3：优先从记忆系统召回历史研究记忆。
+    """
     try:
         agent_state = AgentState.model_validate(state)
         agent = _get_agents()["context"]
@@ -131,6 +165,27 @@ async def analysis_node(state: dict) -> dict:
         return agent_state.model_dump()
 
 
+async def memory_node(state: dict) -> dict:
+    """记忆节点：将研究结果写入长期记忆
+
+    M3 新增节点。
+    读取 state.research + state.analysis + state.report，
+    构建 ResearchMemory / TrendSnapshot / InsightMemory 并保存到 Qdrant。
+    """
+    try:
+        agent_state = AgentState.model_validate(state)
+        agent = _get_agents()["memory"]
+        result = await agent.run(agent_state)
+        return result.model_dump()
+    except Exception as e:
+        logger.error(f"MemoryNode 异常: {e}")
+        # 记忆写入失败不应阻断流程，降级处理
+        agent_state = AgentState.model_validate(state)
+        agent_state.memory.memory_updated = False
+        logger.warning("MemoryNode 失败，降级继续执行")
+        return agent_state.model_dump()
+
+
 async def report_node(state: dict) -> dict:
     """报告节点：生成最终研究报告"""
     try:
@@ -163,13 +218,12 @@ def continue_research(state: dict) -> str:
     - 如果 need_more_data=True 且 search_round < MAX_RESEARCH_ROUNDS → "research"
     - 否则 → "memory"
 
-    M2 阶段图中未注册 memory 节点，"memory" 映射到 "report"。
-    M3 阶段插入 MemoryNode 后，映射自然生效。
+    M3："memory" 映射到真正的 memory_node。
     """
     agent_state = AgentState.model_validate(state)
 
     if agent_state.error_info is not None and agent_state.status == TaskStatus.FAILED:
-        logger.warning("检测到错误状态，跳转到报告节点进行收尾")
+        logger.warning("检测到错误状态，跳转到记忆节点进行收尾")
         return "memory"
 
     if (
@@ -183,7 +237,7 @@ def continue_research(state: dict) -> str:
         )
         return "research"
 
-    logger.info("研究数据充足，进入报告生成阶段")
+    logger.info("研究数据充足，进入记忆写入阶段")
     return "memory"
 
 
@@ -195,17 +249,13 @@ def continue_research(state: dict) -> str:
 def build_research_graph() -> StateGraph:
     """构建研究工作流图
 
-    结构：
+    结构（M3）：
         START → Planner → Context → Research → Analysis
                                               ↓
                                         continue_research (条件边)
                                          ↙        ↘
-                                    Research      Report → END
+                                    Research      Memory → Report → END
                                     (回环)
-
-    Deep Research 回环：
-        Analysis 发现信息不足时，回到 Research 补充数据，
-        最多循环 MAX_RESEARCH_ROUNDS 轮。
     """
     graph = StateGraph(AgentState)
 
@@ -214,6 +264,7 @@ def build_research_graph() -> StateGraph:
     graph.add_node("context", context_node)
     graph.add_node("research", research_node)
     graph.add_node("analysis", analysis_node)
+    graph.add_node("memory", memory_node)
     graph.add_node("report", report_node)
 
     # 注册边
@@ -222,18 +273,18 @@ def build_research_graph() -> StateGraph:
     graph.add_edge("context", "research")
     graph.add_edge("research", "analysis")
 
-    # 条件边：analysis → research（回环）或 memory → report（完成）
-    # M2 阶段未实现 Memory 节点，"memory" 直接映射到 "report"
-    # M3 阶段插入 MemoryNode 后，改为 {"memory": "memory", "research": "research"}
+    # 条件边：analysis → research（回环）或 memory（记忆写入）
     graph.add_conditional_edges(
         "analysis",
         continue_research,
         {
             "research": "research",
-            "memory": "report",
+            "memory": "memory",
         },
     )
 
+    # 记忆写入 → 报告生成 → 结束
+    graph.add_edge("memory", "report")
     graph.add_edge("report", END)
 
     return graph

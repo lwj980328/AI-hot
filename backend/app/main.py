@@ -1,8 +1,19 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.db.session import engine
 from app.db.base import Base
 from app.api import tasks, workflows, reports
+from app.memory.memory_service import MemoryService
+
+# 配置应用日志：显示 INFO 级别，格式简洁
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+# 关闭 httpx 的 DEBUG 日志（Qdrant/LLM 请求）
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -10,7 +21,13 @@ async def lifespan(app: FastAPI):
     # Startup: 创建数据库表
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Startup: 初始化 Qdrant Collection
+    memory_service = MemoryService()
+    await memory_service.init()
+
     yield
+
     # Shutdown: 关闭数据库连接
     await engine.dispose()
 

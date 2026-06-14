@@ -158,3 +158,94 @@
   3. 条件边映射从 `{"memory": "report"}` 改为 `{"memory": "memory"}`
   4. 统一 `MAX_RESEARCH_ROUNDS` 为配置常量
   5. 修复 M1 遗留：状态字符串硬编码、Session 管理
+
+---
+
+## Milestone 3: 记忆系统
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-14
+
+### 1. 核心产出 (What was done)
+* **Qdrant 向量数据库集成**: docker-compose 新增 Qdrant 服务，启动时自动创建 `research_memory`、`trend_memory`、`insight_memory` 三个 Collection
+* **Embedding 服务**: 使用 `fastembed` 本地模型 `BAAI/bge-small-zh-v1.5`（512 维，中文优化），模型缓存到项目 `backend/models/` 目录，通过 HF 镜像源下载
+* **QdrantStore 存储层**: 封装 Collection 管理、upsert、`query_points`（向量检索）、`check_duplicate`（去重），使用单例模式
+* **MemoryService 统一入口**: 组合 EmbeddingService + QdrantStore，提供 `save_research_memory`、`save_trend_snapshot`、`save_insight_memory`、`search_memories`、`get_topic_history` 接口，含去重（0.95 阈值）和污染控制（confidence < 0.6 跳过）
+* **三类记忆模型**: `ResearchMemory`（完整研究报告）、`TrendSnapshot`（趋势快照）、`InsightMemory`（结构化洞察 + MemoryEvidence），均继承 `MemoryRecord` 基类
+* **MemoryAgent**: 读取 `state.research` + `state.analysis` + `state.report`，构建三类记忆并调用 MemoryService 写入 Qdrant
+* **ContextAgent 改造**: 注入 MemoryService，优先从记忆召回历史（`search_memories`），无历史时回退到 LLM 生成
+* **Workflow 图升级**: 新增 `memory_node`，条件边 `"memory"` 从直接映射 `report` 改为映射 `memory_node`，完整流程 `Planner → Context → Research → Analysis → Memory → Report`
+* **日志配置**: `main.py` 添加 `logging.basicConfig`，关闭 httpx DEBUG 日志，应用层 INFO 日志可见
+* **端到端验证通过**: 两次同主题研究均成功召回 5 条历史记忆（2 trend + 3 insight），去重机制正确跳过重复写入
+
+### 2. 踩坑与返工记录 (Mistakes & Rework - 核心反思)
+
+**踩坑 1: qdrant-client 1.18 API 变更**
+* **问题描述**: `AsyncQdrantClient` 没有 `search` 方法，报 `'AsyncQdrantClient' object has no attribute 'search'`
+* **根本原因**: qdrant-client 1.18 版本将异步 `search` 方法重命名为 `query_points`，返回类型从 `list[ScoredPoint]` 变为 `QueryResponse`
+* **最终解法**: `qdrant_store.py` 中 `self.client.search(...)` 改为 `self.client.query_points(...)`，结果遍历从 `results` 改为 `results.points`
+
+**踩坑 2: Hugging Face 下载 SSL 错误**
+* **问题描述**: fastembed 首次下载模型时报 `httpx.ConnectError: [SSL: UNEXPECTED_EOF_WHILE_READING]`
+* **根本原因**: 国内网络无法直接访问 Hugging Face，需要使用镜像源
+* **最终解法**: `config.py` 新增 `hf_endpoint` 配置（默认 `https://hf-mirror.com`），`embedding_service.py` 在加载模型前设置 `os.environ["HF_ENDPOINT"]`
+
+**踩坑 3: report_summary 为空导致 ResearchMemory 不保存**
+* **问题描述**: MemoryAgent 构建 ResearchMemory 时使用 `state.report.summary`，但 LLM 可能返回空字符串，导致 `save_research_memory` 的 `if not memory.report_summary` 判断跳过
+* **根本原因**: `save_research_memory` 要求 `report_summary` 非空，但未考虑 LLM 输出不稳定的场景
+* **最终解法**: `memory_agent.py` 中增加回退逻辑：`report_summary` 为空时使用 `report.title` 或 `markdown_content[:200]`
+
+**踩坑 4: 应用层日志被 SQLAlchemy 日志淹没**
+* **问题描述**: `APP_DEBUG=true` 导致 SQLAlchemy 打印所有 SQL 语句，ContextAgent 的记忆召回日志完全不可见
+* **根本原因**: SQLAlchemy 的 `echo=True` 与 Python logging 配置冲突
+* **最终解法**: `.env` 中 `APP_DEBUG=false` 关闭 SQL 日志；`main.py` 添加 `logging.basicConfig(level=logging.INFO)` 配置应用层日志；`logging.getLogger("httpx").setLevel(logging.WARNING)` 关闭 HTTP 请求日志
+
+**踩坑 5: Topic 过滤匹配失败（早期调试）**
+* **问题描述**: 测试时手动设置 `state.research.topic = 'MCP生态发展趋势'`（原始用户查询），但 PlannerAgent 实际输出 `topic='MCP生态'`，导致 Qdrant topic 过滤不匹配
+* **根本原因**: 测试代码未模拟真实 workflow 流程，PlannerAgent 会将用户查询提炼为更精确的 topic
+* **最终解法**: 测试时使用完整 workflow（经 PlannerAgent），而非手动设置 topic
+
+**踩坑 6: 端口占用导致启动失败**
+* **问题描述**: 手动测试时 uvicorn 报 `[Errno 10048] 通常每个套接字地址只允许使用一次`
+* **根本原因**: 之前 Claude Code 在后台启动的 uvicorn 进程未退出，占用 8000 端口
+* **最终解法**: `netstat -ano | grep ":8000"` 找到 PID，`taskkill //F //PID xxx` 杀死残留进程
+
+**踩坑 7: HTTP 请求间竞态条件**
+* **问题描述**: 创建任务后立即运行工作流，返回 404 "Task不存在"
+* **根本原因**: `get_db_session()` 在请求结束时 commit，两个请求间隔太短时事务可能未提交完成
+* **最终解法**: 测试脚本中在请求间加 `await asyncio.sleep(1)` 等待事务提交；生产环境可通过重试机制解决
+
+### 3. 架构妥协 (Technical Debt)
+* **状态字符串硬编码未修复**: WorkflowService 中仍使用 `"running"`、`"completed"`、`"failed"` 等字符串而非 TaskStatus 枚举（M1 遗留，M3 未修）
+* **MAX_RESEARCH_ROUNDS 重复定义未修复**: `graph.py` 和 `AnalysisAgent` 各自定义了 `MAX_RESEARCH_ROUNDS = 3`，应统一为配置常量（M2 遗留，M3 未修）
+* **Session 管理未修复**: `get_db_session()` 在退出时自动 commit，绕过了 Service 层控制事务的规范（M1 遗留，M3 未修）
+* **Embedding 模型硬编码**: `BAAI/bge-small-zh-v1.5` 是轻量级小模型，精度有限；生产环境应替换为更大的中文 embedding 模型
+* **记忆检索无重排序**: 当前直接使用向量相似度排序，未做 rerank；未来可接入 cross-encoder 提升召回质量
+* **MemoryService 未接入 ServiceContainer**: 按照 `09_Service设计.md` 应通过容器管理，当前采用单例模式作为折中
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了一轮代码审核，发现并修复了以下问题：
+
+* **审核发现** (4 个问题):
+  1. `qdrant-client` API 变更（`search` → `query_points`）→ 已修复
+  2. `report_summary` 为空导致记忆不保存 → 已修复
+  3. `_get_agents()` 每次调用重新实例化 Agent → 已修复（加模块级缓存）
+  4. MemoryService 未统一为单例 → 已修复（改为 `__new__` 单例模式）
+
+* **M1/M2 遗留问题确认未修复**:
+  1. 状态字符串硬编码（M1 遗留）
+  2. MAX_RESEARCH_ROUNDS 重复定义（M2 遗留）
+  3. Session 管理绕过 Service 层（M1 遗留）
+
+### 5. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: 使用第三方库的新版本时，必须先检查 API 是否有 breaking change（如 qdrant-client 1.18 的 `search` → `query_points`）
+* **防错规则 2**: LLM 输出的任何字段都可能为空，必须有回退逻辑，不能依赖 LLM 输出非空
+* **防错规则 3**: 测试时必须模拟真实 workflow 流程，不能手动设置中间状态（如直接设置 topic），否则会跳过 PlannerAgent 等节点的处理逻辑
+* **防错规则 4**: 所有 Service 层类应采用单例模式，确保全局唯一实例
+* **架构红线 1**: Agent 通过 Service 访问基础设施（Qdrant、Embedding），禁止直接实例化基础设施客户端
+* **架构红线 2**: 记忆写入失败不应阻断 workflow，必须降级处理（MemoryNode 的 try/except 设计）
+* **衔接提醒**: 进入 M4 工具系统前，需要：
+  1. ResearchAgent 的 LLM 模拟数据替换为真实工具调用（ArxivTool、GithubTool）
+  2. 新增 BaseTool、ToolRegistry、ToolService 抽象层
+  3. 修复 M1/M2 遗留：状态字符串硬编码、MAX_RESEARCH_ROUNDS 统一、Session 管理

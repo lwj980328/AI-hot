@@ -42,13 +42,21 @@ class WorkflowService:
             manager = ResearchWorkflowManager()
             final_state = await manager.run(task_id, task.user_query)
 
-            # 5. 保存报告
-            await self.report_repo.create(
-                task_id=task_id,
-                title=final_state.report.title,
-                summary=final_state.report.summary,
-                markdown_content=final_state.report.markdown_content,
+            logger.info(
+                f"工作流执行完成: task_id={task_id}, "
+                f"report_title={final_state.report.title}, "
+                f"report_summary_len={len(final_state.report.summary)}, "
+                f"report_content_len={len(final_state.report.markdown_content)}"
             )
+
+            # 5. 保存报告
+            report = await self.report_repo.create(
+                task_id=task_id,
+                title=final_state.report.title or f"{task.user_query}研究报告",
+                summary=final_state.report.summary or "",
+                markdown_content=final_state.report.markdown_content or "",
+            )
+            logger.info(f"报告已保存: report_id={report.id}")
 
             # 6. 更新状态
             await self.run_repo.finish_run(run.id)
@@ -59,7 +67,10 @@ class WorkflowService:
 
         except Exception as e:
             # 失败处理
-            await self.run_repo.fail_run(run.id, str(e))
-            await self.task_repo.update_status(task_id, "failed")
-            logger.error(f"工作流执行失败: {task_id}, 错误: {e}")
+            logger.exception(f"工作流执行失败: {task_id}")
+            try:
+                await self.run_repo.fail_run(run.id, str(e))
+                await self.task_repo.update_status(task_id, "failed")
+            except Exception as inner_e:
+                logger.error(f"更新失败状态也出错: {inner_e}")
             raise WorkflowError(f"工作流执行失败: {str(e)}")
