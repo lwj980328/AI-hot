@@ -249,3 +249,90 @@
   1. ResearchAgent 的 LLM 模拟数据替换为真实工具调用（ArxivTool、GithubTool）
   2. 新增 BaseTool、ToolRegistry、ToolService 抽象层
   3. 修复 M1/M2 遗留：状态字符串硬编码、MAX_RESEARCH_ROUNDS 统一、Session 管理
+
+---
+
+## Milestone 4: 工具系统
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-15
+
+### 1. 核心产出 (What was done)
+* **工具基础层**: `BaseTool` 抽象基类、`LocalTool` 本地工具基类（封装 HTTP GET/JSON/Text 请求、超时控制、异常转换）、`ToolRegistry` 单例（注册/发现/列表）、`ToolService` 单例执行入口（重试 3 次、指数退避、输入输出校验）
+* **工具异常体系**: `ToolError`、`ToolTimeoutError`、`ToolConnectionError`、`ToolValidationError`、`ToolAuthenticationError`、`ToolRateLimitError`、`ToolNotFoundError`，均继承 `ServiceError`
+* **ArxivTool**: 调用 `export.arxiv.org` Atom API，解析 XML 提取论文标题/摘要/作者/分类，支持 `quote_plus` 编码中文关键词
+* **GithubTool**: 调用 GitHub Search API 获取仓库数据（stars/forks/language/topics），支持可选 `GITHUB_API_TOKEN`
+* **HuggingFaceTool**: 调用 HuggingFace Hub API 搜索模型（downloads/likes/pipeline_tag）
+* **WebSearchTool**: 占位实现，注册到 Registry 但返回空结果，预留未来接入 Serper/Bing 等外部搜索 API
+* **ResearchAgent 改造**: 注入 `ToolService`，按 `state.research.data_sources` 动态调用对应工具，失败时降级到 LLM 模拟数据；新增 `data_source_tags` 字段标记每条数据是真实还是模拟
+* **ReportAgent 改造**: 新增 `_build_source_attribution()` 方法，在报告末尾追加"数据来源说明"章节
+* **WorkflowService 状态硬编码修复**: `"running"` / `"completed"` / `"failed"` 替换为 `TaskStatus` 枚举（M1 遗留修复）
+* **配置项新增**: `github_api_token`、`tool_timeout_seconds`、`tool_max_retries`、`arxiv_max_results`、`huggingface_max_results`
+* **应用启动自动注册**: `main.py` 的 `lifespan` 中调用 `_register_tools()` 将四个工具注册到 `ToolRegistry`
+* **单元测试**: 16 个测试用例覆盖 ToolRegistry（5 个）、ArxivTool（2 个）、GithubTool（3 个）、ToolService（6 个），全部通过
+* **端到端验证通过**: 三个真实 API（Arxiv、GitHub、HuggingFace）均成功返回真实数据，报告末尾正确标注数据来源
+
+### 2. 踩坑与返工记录 (Mistakes & Rework - 核心反思)
+
+**踩坑 1: ArxivTool HTTP 301 重定向**
+* **问题描述**: ArxivTool 调用 `http://export.arxiv.org/api/query` 返回 HTTP 301，重试 4 次后失败
+* **根本原因**: arxiv.org 强制从 HTTP 跳转到 HTTPS，但 `httpx.AsyncClient` 默认不跟随重定向
+* **最终解法**: `local_tool.py` 的 `_get_json()` 和 `_get_text()` 中添加 `follow_redirects=True`
+
+**踩坑 2: .env 行内注释被 pydantic-settings 当作配置值**
+* **问题描述**: `.env` 文件 `GITHUB_API_TOKEN=  # 可选，提高 GitHub API 限流额度` 中的中文注释被读入 token 值，作为 `Authorization` header 发出，导致 ASCII 编码错误
+* **根本原因**: `pydantic-settings` + `python-dotenv` 对行内注释的处理不一致，`#` 后的内容被当作值的一部分
+* **最终解法**: `.env` 中注释移到独立一行，`GITHUB_API_TOKEN=` 保持空值
+* **教训**: `.env` 文件禁止使用行内注释，注释必须独占一行
+
+**踩坑 3: httpx params 中文编码冲突**
+* **问题描述**: GithubTool 将 `quote_plus(keyword)` 放入 `params` 字典，httpx 再次编码导致冲突
+* **根本原因**: `quote_plus` 已经将中文编码为 `%E7%94%9F...`，httpx 的 params 处理可能再次编码或解码
+* **最终解法**: 将编码后的关键词直接拼接到 URL 字符串中，不走 `params` 字典
+
+**踩坑 4: Atom XML 命名空间不匹配**
+* **问题描述**: ArxivTool 的 `total_results` 始终解析为 0
+* **根本原因**: `totalResults` 元素使用 `http://a9.com/-/spec/opensearch/1.1/` 命名空间，而非 `http://www.w3.org/2005/Atom`
+* **最终解法**: 新增 `OS_NS` 命名空间字典，`root.find("os:totalResults", OS_NS)`
+
+**踩坑 5: agents/__init__.py 遗漏 MemoryAgent 导出**
+* **问题描述**: 代码审查发现 `app/agents/__init__.py` 没有导出 `MemoryAgent`
+* **根本原因**: M3 新增 MemoryAgent 时忘记更新 `__init__.py`
+* **最终解法**: 补充 `from app.agents.memory_agent import MemoryAgent` 和 `__all__` 列表
+
+### 3. 架构妥协 (Technical Debt)
+* **WebSearchTool 占位实现**: 当前返回空结果，未来需接入 Serper/Bing 等外部搜索 API（需 API Key 和费用）
+* **HuggingFaceTool 简化实现**: 仅调用基础模型搜索 API，未实现模型详情、推理 API 等高级功能
+* **ResearchAgent._invoke_tool() 中直接 import 工具 Schema**: 虽然不是"依赖具体工具实现"（Schema 是 Pydantic 模型，不是工具类），但如果工具 Schema 变更需要同步修改 Agent 代码
+* **MAX_RESEARCH_ROUNDS 重复定义未修复**: `graph.py` 和 `AnalysisAgent` 各自定义了 `MAX_RESEARCH_ROUNDS = 3`，应统一为配置常量（M2 遗留，M4 未在范围内）
+* **Session 管理未修复**: `get_db_session()` 在退出时自动 commit，绕过了 Service 层控制事务的规范（M1 遗留，M4 未在范围内）
+* **记忆检索无重排序**: 当前直接使用向量相似度排序，未做 rerank（M3 遗留）
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了一轮完整代码审核，对照 `CLAUDE.md`、`02_Agent设计规范.md`、`03_工具设计规范.md`、`10_WorkflowManager设计.md` 逐条检查：
+
+* **审核结果**: **全部合规，无违规项**
+* **审核覆盖范围**:
+  - 原则一（状态驱动）✅：所有节点通过 AgentState 通信
+  - 原则二（强类型）✅：所有工具输入/输出均为 Pydantic BaseModel
+  - 原则三（Agent 只负责推理）✅：Agent 不直接访问 HTTP/DB/Qdrant
+  - 原则四（工具统一管理）✅：Agent → ToolService → ToolRegistry → Tool
+  - 原则五（分层架构）✅：无跳层访问
+  - 原则六（可扩展）✅：新增工具只需实现 BaseTool + 注册
+  - Agent 不直接依赖具体工具实现 ✅：通过 ToolService + 工具名字符串调用
+  - 工具异常体系 ✅：完整覆盖超时/连接/验证/认证/限流场景
+
+### 5. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: `.env` 文件禁止使用行内注释（`KEY=value  # comment`），注释必须独占一行，否则 pydantic-settings 会把注释当作值
+* **防错规则 2**: httpx 请求必须设置 `follow_redirects=True`，否则 HTTPS 重定向会返回 301 错误
+* **防错规则 3**: 中文关键词放入 httpx `params` 字典前，需确认不会导致双重编码；保险做法是直接拼接到 URL 字符串
+* **防错规则 4**: 解析第三方 API 的 XML/JSON 时，必须确认命名空间和字段路径，不能凭假设编写
+* **防错规则 5**: 新增 Agent/Service 后必须检查 `__init__.py` 是否导出，否则延迟导入会失败
+* **架构红线 1**: Agent 通过 ToolService 调用工具，禁止在 Agent 中直接实例化工具类（如 `ArxivTool()`）
+* **架构红线 2**: 工具失败不应阻断 workflow，必须降级处理（ResearchAgent 的 fallback 机制）
+* **衔接提醒**: 进入 M5 MCP 集成前，需要：
+  1. 实现 `MCPToolAdapter`，将 MCP Server 的工具适配为 BaseTool 接口
+  2. 实现 MCP 连接管理、工具发现、工具调用
+  3. Agent 无需修改即可通过 ToolRegistry 使用 MCP 工具
+  4. 修复 M2 遗留：MAX_RESEARCH_ROUNDS 统一为配置常量

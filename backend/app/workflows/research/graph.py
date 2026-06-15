@@ -50,11 +50,12 @@ def _get_agents():
     from app.agents.analysis_agent import AnalysisAgent
     from app.agents.memory_agent import MemoryAgent
     from app.agents.report_agent import ReportAgent
+    from app.tools.base.tool_service import ToolService
 
     _AGENTS_CACHE = {
         "planner": PlannerAgent(),
         "context": ContextAgent(),
-        "research": ResearchAgent(),
+        "research": ResearchAgent(tool_service=ToolService()),
         "analysis": AnalysisAgent(),
         "memory": MemoryAgent(),
         "report": ReportAgent(),

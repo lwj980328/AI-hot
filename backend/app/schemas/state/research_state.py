@@ -17,3 +17,6 @@ class ResearchState(BaseModel):
     papers: list[PaperRecord] = Field(default_factory=list)
     repositories: list[RepositoryRecord] = Field(default_factory=list)
     models: list[ModelRecord] = Field(default_factory=list)
+
+    # 数据来源标记：记录每次研究的数据是真实 API 还是 LLM 模拟
+    data_source_tags: list[str] = Field(default_factory=list)

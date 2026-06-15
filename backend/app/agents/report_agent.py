@@ -91,7 +91,14 @@ class ReportAgent:
 
             state.report.title = data.get("title", f"{state.research.topic}研究报告")
             state.report.summary = data.get("summary", "")
-            state.report.markdown_content = data.get("markdown_content", "")
+            markdown = data.get("markdown_content", "")
+
+            # 追加数据来源说明
+            attribution = self._build_source_attribution(state)
+            if attribution:
+                markdown += attribution
+
+            state.report.markdown_content = markdown
 
         except Exception as e:
             logger.warning(f"LLM调用失败，使用默认报告: {e}")
@@ -102,6 +109,46 @@ class ReportAgent:
 
         state.status = TaskStatus.COMPLETED
         return state
+
+    def _build_source_attribution(self, state: AgentState) -> str:
+        """构建数据来源说明章节
+
+        根据 state.research.data_source_tags 生成 Markdown 格式的来源说明，
+        帮助读者区分哪些数据是真实 API 获取、哪些是 LLM 模拟生成。
+        """
+        tags = state.research.data_source_tags
+        sources = state.research.data_sources
+
+        if not tags or not sources:
+            return ""
+
+        real_sources = [s for s, t in zip(sources, tags) if t == "real"]
+        simulated_sources = [s for s, t in zip(sources, tags) if t == "simulated"]
+
+        lines = ["\n\n## 数据来源说明\n"]
+
+        if real_sources:
+            real_labels = self._source_to_labels(real_sources)
+            lines.append(f"- **真实数据**：{', '.join(real_labels)}（来自官方 API）")
+        if simulated_sources:
+            sim_labels = self._source_to_labels(simulated_sources)
+            lines.append(f"- **模拟数据**：{', '.join(sim_labels)}（因 API 不可用，由 LLM 生成）")
+
+        if not real_sources:
+            lines.append("\n> ⚠️ 本报告所有数据均由 LLM 模拟生成，仅供参考，不代表真实研究数据。")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _source_to_labels(sources: list[str]) -> list[str]:
+        """将 data_source 名称转换为可读标签"""
+        label_map = {
+            "arxiv": "Arxiv 论文",
+            "github": "GitHub 仓库",
+            "huggingface": "HuggingFace 模型",
+            "web": "网页搜索",
+        }
+        return [label_map.get(s, s) for s in sources]
 
     def _generate_default_report(self, state: AgentState) -> str:
         """生成默认报告（LLM调用失败时使用）"""

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.task_repo import TaskRepository
 from app.repositories.workflow_run_repo import WorkflowRunRepository
 from app.repositories.report_repo import ReportRepository
+from app.schemas.state.agent_state import TaskStatus
 from app.services.dto.task_dto import WorkflowRunDTO
 from app.services.exceptions import NotFoundError, WorkflowError
 from app.workflows.research.manager import ResearchWorkflowManager
@@ -31,11 +32,11 @@ class WorkflowService:
             task_id=task_id,
             run_number=1,
             trigger_type="api",
-            status="running",
+            status=TaskStatus.RESEARCHING.value,
         )
 
         # 3. 更新任务状态
-        await self.task_repo.update_status(task_id, "running")
+        await self.task_repo.update_status(task_id, TaskStatus.RESEARCHING.value)
 
         # 4. 执行工作流（task_id 和 user_query 由 Manager 内部构建 AgentState）
         try:
@@ -60,7 +61,7 @@ class WorkflowService:
 
             # 6. 更新状态
             await self.run_repo.finish_run(run.id)
-            await self.task_repo.update_status(task_id, "completed")
+            await self.task_repo.update_status(task_id, TaskStatus.COMPLETED.value)
 
             logger.info(f"工作流执行成功: {task_id}")
             return WorkflowRunDTO.model_validate(run)
@@ -70,7 +71,7 @@ class WorkflowService:
             logger.exception(f"工作流执行失败: {task_id}")
             try:
                 await self.run_repo.fail_run(run.id, str(e))
-                await self.task_repo.update_status(task_id, "failed")
+                await self.task_repo.update_status(task_id, TaskStatus.FAILED.value)
             except Exception as inner_e:
                 logger.error(f"更新失败状态也出错: {inner_e}")
             raise WorkflowError(f"工作流执行失败: {str(e)}")
