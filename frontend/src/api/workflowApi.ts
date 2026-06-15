@@ -11,7 +11,7 @@ export const workflowApi = {
 
   /** 获取任务的运行记录 */
   getRuns: async (taskId: string): Promise<WorkflowRun[]> => {
-    const { data } = await apiClient.get<WorkflowRun[]>(`/tasks/${taskId}/runs`);
+    const { data } = await apiClient.get<WorkflowRun[]>(`/workflows/runs/${taskId}`);
     return data;
   },
 };

@@ -500,13 +500,16 @@ backend/tests/
 * **路由配置**: React Router v7 实现页面导航
 * **后端 CORS**: FastAPI CORS 中间件配置，允许前端开发服务器访问
 * **Vite 代理**: 开发环境 API 代理配置，避免跨域问题
+* **ApiResponse 统一包装**: 后端所有 API 使用 `ApiResponse[T]` 包装响应，前端拦截器自动提取 `data` 字段
+* **状态轮询机制**: 任务详情每 5 秒轮询，任务列表每 10 秒轮询，完成/失败后自动停止
+* **工作流自动触发**: 任务创建后自动触发工作流，无需手动点击
 
 ### 2. 新增文件清单
 ```
 frontend/
 ├── src/
 │   ├── api/
-│   │   ├── client.ts           # Axios 实例
+│   │   ├── client.ts           # Axios 实例 + ApiResponse 拦截器
 │   │   ├── taskApi.ts          # 任务 API
 │   │   ├── workflowApi.ts      # 工作流 API
 │   │   ├── reportApi.ts        # 报告 API
@@ -541,45 +544,116 @@ frontend/
 │   │   └── reports/
 │   │       └── ReportViewer.tsx
 │   ├── hooks/
-│   │   ├── useTasks.ts
+│   │   ├── useTasks.ts         # 任务列表/详情/创建 + 轮询
 │   │   ├── useReports.ts
-│   │   ├── useWorkflows.ts
+│   │   ├── useWorkflows.ts     # 工作流运行/记录查询
 │   │   └── useHealth.ts
-│   ├── stores/                 # 预留
+│   ├── stores/
+│   │   └── appStore.ts         # Zustand 应用状态
 │   ├── types/
-│   │   ├── task.ts
+│   │   ├── task.ts             # TaskStatus 与后端一致（9 种状态）
 │   │   ├── workflow.ts
 │   │   ├── report.ts
 │   │   ├── tool.ts
-│   │   └── api.ts
+│   │   └── api.ts              # ApiResponse 定义
 │   ├── utils/
 │   │   ├── cn.ts               # className 合并
 │   │   ├── format.ts           # 格式化工具
-│   │   └── status.ts           # 状态配置
+│   │   └── status.ts           # 状态配置（11 种状态映射）
 │   ├── routes/index.tsx
 │   ├── App.tsx
 │   ├── main.tsx
-│   └── index.css               # TailwindCSS + 主题变量
+│   ├── index.css               # TailwindCSS + 主题变量
+│   └── vite-env.d.ts           # Vite 类型声明
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.app.json
 └── package.json
+
+backend/app/
+├── schemas/api/
+│   └── common.py               # ApiResponse 泛型模型
+├── api/
+│   ├── tasks.py                # 使用 ApiResponse 包装
+│   ├── workflows.py            # 新增 /runs/{task_id} 路由
+│   ├── reports.py              # 使用 ApiResponse 包装
+│   └── tools.py                # 使用 ApiResponse 包装
+├── services/
+│   └── workflow_service.py     # 新增 get_runs_by_task()
+└── repositories/
+    └── workflow_run_repo.py    # 新增 get_runs_by_task()
 ```
 
 ### 3. 踩坑与返工记录 (Mistakes & Rework)
+
 **踩坑 1: TypeScript 7.0 废弃 baseUrl**
-* **问题描述**: `tsconfig.app.json` 中的 `baseUrl` 选项在 TypeScript 7.0 中被废弃
+* **问题描述**: `tsconfig.app.json` 中的 `baseUrl` 选项在 TypeScript 7.0 中被废弃，构建报错
+* **根本原因**: TypeScript 7.0 移除了 `baseUrl` 选项
 * **最终解法**: 移除 `baseUrl`，仅保留 `paths` 配置
 
 **踩坑 2: 未使用的导入导致构建失败**
-* **问题描述**: 多个文件中存在未使用的导入（Wrench、Badge、EmptyState）
+* **问题描述**: 多个文件中存在未使用的导入（Wrench、Badge、EmptyState），TypeScript strict 模式报错
+* **根本原因**: 开发过程中删除了功能但忘记清理导入
 * **最终解法**: 移除未使用的导入
 
 **踩坑 3: CSS 类型声明缺失**
-* **问题描述**: `import './index.css'` 缺少类型声明
+* **问题描述**: `import './index.css'` 缺少类型声明，TypeScript 报错
+* **根本原因**: Vite 默认不包含 CSS 模块的类型声明
 * **最终解法**: 创建 `vite-env.d.ts` 文件引用 Vite 类型
 
-### 4. 验收测试结果
+**踩坑 4: 工作流 API 超时导致前端卡死**
+* **问题描述**: 创建任务后点击"开始研究"，一直显示"创建中..."，页面无响应
+* **根本原因**: 工作流 API 执行时间约 85 秒，但 Axios 超时设置为 30 秒，导致请求超时失败；且 `mutateAsync` 会等待完成才执行后续代码
+* **最终解法**: 任务创建成功后立即跳转，工作流触发改为 `mutate`（不等待结果）
+
+**踩坑 5: 任务列表不显示最新任务**
+* **问题描述**: 创建任务后返回任务列表，看不到新创建的任务
+* **根本原因**: `BaseRepository.list_all()` 没有排序，数据库返回顺序不确定；前端 limit=20 只获取 20 条
+* **最终解法**: 后端添加 `order_by(desc(created_at))`，前端 limit 改为 50
+
+**踩坑 6: 任务状态显示"等待中"而非实际状态**
+* **问题描述**: 任务正在执行研究，但前端显示"等待中"
+* **根本原因**: 后端状态为 `created`、`researching` 等，但前端 `statusConfig` 只有 `pending`、`running`、`completed`、`failed`
+* **最终解法**: 补充所有中间状态映射（created、planning、context_loading、researching、analyzing、memory_updating、reporting）
+
+**踩坑 7: 报告 API 返回 404**
+* **问题描述**: 任务执行期间，前端不断请求报告 API，返回 404
+* **根本原因**: 前端在任务创建后立即请求报告，但报告还未生成
+* **最终解法**: 只在任务状态为 `completed` 时才请求报告
+
+**踩坑 8: 任务详情页显示"启动工作流"按钮**
+* **问题描述**: 从 TaskForm 跳转到任务详情后，显示"启动工作流"按钮，但工作流已在后台触发
+* **根本原因**: 任务状态还是 `created`，触发条件判断为显示按钮
+* **最终解法**: 移除手动启动按钮，改为自动触发（useEffect 检测 `created` 状态且无运行记录时自动触发）
+
+**踩坑 9: /tasks/{id}/runs 路由 404**
+* **问题描述**: 前端请求 `/api/v1/tasks/{task_id}/runs` 返回 404
+* **根本原因**: 后端未实现该路由，前端 API 路径与后端不匹配
+* **最终解法**: 后端新增 `/workflows/runs/{task_id}` 路由，前端更新 API 路径
+
+**踩坑 10: 统计数据只计算最近 10 条任务**
+* **问题描述**: Dashboard 显示"总任务数: 10"，但实际有更多任务
+* **根本原因**: `useTasks(10)` 只获取 10 条任务，统计基于返回数据
+* **最终解法**: 改为 `useTasks(100)` 获取更多任务用于统计
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了两轮代码审核，对照 `docs/08_API设计.md` 和 `docs/11_前端设计.md` 逐条检查：
+
+**第一轮审核** (4 个违规项):
+* 违规 1：ApiResponse 包装未实现 → 已修复（后端 4 个 API 路由 + 前端拦截器）
+* 违规 2：Zustand Store 未实现 → 已修复（创建 appStore.ts）
+* 违规 3：TaskStatus 类型不完整 → 已修复（补充 9 种状态）
+* 违规 4：状态映射缺失 → 已修复（status.ts 补充 11 种状态）
+
+**第二轮审核** (0 个违规项，3 项技术债):
+* 技术债 1：WorkflowRunStatus 与后端不一致 → 低优先级
+* 技术债 2：PaginatedData 未使用 → 低优先级
+* 技术债 3：appStore 未被引用 → 低优先级
+
+* **教训**: 前后端联调时必须确认 API 路径、请求/响应格式完全一致；状态类型定义必须与后端枚举同步
+
+### 5. 验收测试结果
 
 | 验收项 | 结果 | 说明 |
 |--------|------|------|
@@ -587,24 +661,33 @@ frontend/
 | Dashboard 显示统计 | ✅ | 调用 API 展示任务数、系统状态 |
 | 创建研究任务 | ✅ | 输入主题，点击按钮，任务创建成功 |
 | 触发 Workflow | ✅ | 任务创建后自动触发工作流 |
-| 查看任务列表 | ✅ | 展示历史任务及状态 |
-| 查看报告 | ✅ | 点击任务查看 Markdown 报告 |
+| 任务状态实时更新 | ✅ | 每 5 秒轮询，显示当前阶段 |
+| 查看任务列表 | ✅ | 按创建时间倒序，每 10 秒刷新 |
+| 查看报告 | ✅ | 任务完成后自动加载报告 |
 | API 联调 | ✅ | 前后端通信正常（Vite 代理） |
+| ApiResponse 包装 | ✅ | 统一响应格式 |
 | TypeScript 构建 | ✅ | 无类型错误 |
 | 生产构建 | ✅ | `npm run build` 成功 |
 
-### 5. 架构妥协 (Technical Debt)
-* **WebSocket 未实现**: 任务状态通过轮询更新，非实时
+### 6. 架构妥协 (Technical Debt)
+* **WebSocket 未实现**: 任务状态通过轮询更新（5 秒间隔），非实时，后续可接入 WebSocket
 * **用户认证未实现**: MVP 阶段暂不支持多用户
 * **响应式基础**: 优先桌面端，移动端体验待优化
-* **状态管理简化**: Zustand Store 预留但未大量使用，TanStack Query 已足够
+* **appStore 未充分利用**: Zustand Store 已创建但页面组件仍通过 URL 参数管理状态，后续优化
+* **WorkflowRunStatus 不一致**: 前端定义与后端实际使用不完全一致，后续同步
+* **统计数据不精确**: Dashboard 统计基于最近 100 条任务，非全量数据，后续添加统计接口
 * **无单元测试**: MVP 阶段优先功能实现，测试后续补充
 
-### 6. 后续开发的硬性规则 (Rules for Next Steps)
+### 7. 后续开发的硬性规则 (Rules for Next Steps)
+
 * **防错规则 1**: 前端组件使用 `@/` 路径别名，避免相对路径混乱
 * **防错规则 2**: 数据获取统一使用 TanStack Query，禁止 useEffect + fetch
 * **防错规则 3**: 样式使用 TailwindCSS 工具类，避免自定义 CSS
 * **防错规则 4**: 组件拆分遵循 features/ 目录结构，保持页面组件简洁
+* **防错规则 5**: 前后端 API 路径、请求/响应格式必须完全一致，联调前先确认
+* **防错规则 6**: 状态类型定义必须与后端枚举同步，新增状态时同步更新 status.ts
+* **防错规则 7**: 长时间运行的 API（>30 秒）使用异步触发，不阻塞前端
+* **防错规则 8**: 依赖后端数据的请求（如报告），必须在前置条件满足后再发起（如任务完成）
 * **衔接提醒**: 进入 M7 Workflow 可视化前，需要：
   1. 安装 ReactFlow 依赖
   2. 设计 Workflow 节点和边的数据结构

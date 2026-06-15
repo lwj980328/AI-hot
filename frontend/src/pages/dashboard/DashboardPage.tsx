@@ -43,7 +43,8 @@ function StatCard({
 
 /** Dashboard 页面 */
 export function DashboardPage() {
-  const { data: tasks, isLoading: tasksLoading } = useTasks(10);
+  // 获取最近 100 条任务用于统计
+  const { data: tasks, isLoading: tasksLoading } = useTasks(100);
   const { data: health, isLoading: healthLoading } = useHealth();
   const navigate = useNavigate();
 

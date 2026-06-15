@@ -2,21 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { useCreateTask } from "@/hooks/useTasks";
 import { useRunWorkflow } from "@/hooks/useWorkflows";
 import { Loader2, Search } from "lucide-react";
 
-/** 任务类型选项 */
-const taskTypeOptions = [
-  { value: "research", label: "深度研究" },
-  { value: "daily", label: "日报" },
-];
-
 /** 任务创建表单 */
 export function TaskForm() {
   const [query, setQuery] = useState("");
-  const [taskType, setTaskType] = useState("research");
   const navigate = useNavigate();
 
   const createTask = useCreateTask();
@@ -33,11 +25,12 @@ export function TaskForm() {
         task_name: query,
       });
 
-      // 自动触发工作流
-      await runWorkflow.mutateAsync({ task_id: task.id });
+      // 异步触发工作流（不等待结果）
+      runWorkflow.mutate({ task_id: task.id });
 
-      // 跳转到研究页面
-      navigate(`/research?task=${task.id}`);
+      // 立即跳转到研究页面（不等待工作流完成）
+      // 使用 replace 防止用户返回到表单页面
+      navigate(`/research?task=${task.id}`, { replace: true });
     } catch (error) {
       console.error("创建任务失败:", error);
     }
@@ -57,13 +50,6 @@ export function TaskForm() {
           disabled={isLoading}
         />
       </div>
-      <Select
-        value={taskType}
-        onChange={(e) => setTaskType(e.target.value)}
-        options={taskTypeOptions}
-        className="w-32"
-        disabled={isLoading}
-      />
       <Button type="submit" disabled={isLoading || !query.trim()}>
         {isLoading ? (
           <>

@@ -20,6 +20,11 @@ class WorkflowService:
         self.run_repo = WorkflowRunRepository(session)
         self.report_repo = ReportRepository(session)
 
+    async def get_runs_by_task(self, task_id: str) -> list[WorkflowRunDTO]:
+        """获取任务的所有运行记录"""
+        runs = await self.run_repo.get_runs_by_task(task_id)
+        return [WorkflowRunDTO.model_validate(run) for run in runs]
+
     async def run_task(self, task_id: str) -> WorkflowRunDTO:
         """执行研究任务的工作流"""
         # 1. 获取任务

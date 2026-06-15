@@ -3,13 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db_session
 from app.schemas.api.task_request import CreateTaskRequest
 from app.schemas.api.task_response import TaskResponse
+from app.schemas.api.common import ApiResponse
 from app.services.task_service import TaskService
 from app.services.exceptions import NotFoundError, ValidationError
 
 router = APIRouter()
 
 
-@router.post("", response_model=TaskResponse)
+@router.post("", response_model=ApiResponse[TaskResponse])
 async def create_task(
     request: CreateTaskRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -21,12 +22,12 @@ async def create_task(
             task_name=request.task_name,
             user_query=request.user_query,
         )
-        return task
+        return ApiResponse.ok(task)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("", response_model=ApiResponse[list[TaskResponse]])
 async def list_tasks(
     limit: int = 20,
     offset: int = 0,
@@ -35,10 +36,10 @@ async def list_tasks(
     """获取任务列表"""
     service = TaskService(session)
     tasks = await service.list_tasks(limit=limit, offset=offset)
-    return tasks
+    return ApiResponse.ok(tasks)
 
 
-@router.get("/{task_id}", response_model=TaskResponse)
+@router.get("/{task_id}", response_model=ApiResponse[TaskResponse])
 async def get_task(
     task_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -46,6 +47,7 @@ async def get_task(
     """获取任务详情"""
     try:
         service = TaskService(session)
-        return await service.get_task(task_id)
+        task = await service.get_task(task_id)
+        return ApiResponse.ok(task)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

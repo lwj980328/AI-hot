@@ -9,8 +9,10 @@ export function useRunWorkflow() {
   return useMutation({
     mutationFn: (request: RunWorkflowRequest) => workflowApi.run(request),
     onSuccess: () => {
-      // 运行成功后刷新任务列表
+      // 运行成功后刷新任务列表和任务详情
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["task"] });
+      queryClient.invalidateQueries({ queryKey: ["report"] });
     },
   });
 }

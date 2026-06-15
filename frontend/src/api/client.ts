@@ -9,9 +9,21 @@ const apiClient = axios.create({
   },
 });
 
-// 响应拦截器：统一错误处理
+// 响应拦截器：统一处理 ApiResponse
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // 提取 ApiResponse.data 字段
+    const apiResponse = response.data;
+    if (apiResponse && typeof apiResponse === "object" && "success" in apiResponse) {
+      if (!apiResponse.success) {
+        // API 返回错误
+        return Promise.reject(new Error(apiResponse.message || "请求失败"));
+      }
+      // 替换 response.data 为实际数据
+      response.data = apiResponse.data;
+    }
+    return response;
+  },
   (error) => {
     console.error("API Error:", error.response?.data || error.message);
     return Promise.reject(error);

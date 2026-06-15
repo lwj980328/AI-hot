@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import select
+from typing import Sequence
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.workflow_run import WorkflowRun
 from app.repositories.base_repo import BaseRepository
@@ -29,6 +30,15 @@ class WorkflowRunRepository(BaseRepository[WorkflowRun]):
             run.error_message = error_message
             await self.session.flush()
         return run
+
+    async def get_runs_by_task(self, task_id: str) -> Sequence[WorkflowRun]:
+        """获取任务的所有运行记录"""
+        result = await self.session.execute(
+            select(WorkflowRun)
+            .where(WorkflowRun.task_id == task_id)
+            .order_by(desc(WorkflowRun.started_at))
+        )
+        return result.scalars().all()
 
     async def get_latest_by_task(self, task_id: str) -> WorkflowRun | None:
         """获取任务最新的运行记录"""

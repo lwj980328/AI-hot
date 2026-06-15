@@ -1,5 +1,5 @@
 from typing import TypeVar, Generic, Type, Sequence
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import Base
 
@@ -28,8 +28,11 @@ class BaseRepository(Generic[ModelType]):
         return result.scalar_one_or_none()
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> Sequence[ModelType]:
-        """查询列表"""
+        """查询列表，按创建时间倒序排列"""
         result = await self.session.execute(
-            select(self.model).limit(limit).offset(offset)
+            select(self.model)
+            .order_by(desc(self.model.created_at))
+            .limit(limit)
+            .offset(offset)
         )
         return result.scalars().all()

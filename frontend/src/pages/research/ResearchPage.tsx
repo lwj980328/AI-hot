@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTasks, useTask } from "@/hooks/useTasks";
-import { useRunWorkflow } from "@/hooks/useWorkflows";
+import { useRunWorkflow, useWorkflowRuns } from "@/hooks/useWorkflows";
 import { useReportByTask } from "@/hooks/useReports";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { formatDateTime } from "@/utils/format";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  Play,
   FileText,
   ArrowLeft,
   FlaskConical,
@@ -24,32 +23,24 @@ export function ResearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTaskId = searchParams.get("task");
 
-  const { data: tasks, isLoading: tasksLoading } = useTasks(20);
+  const { data: tasks, isLoading: tasksLoading } = useTasks(50);
   const { data: activeTask } = useTask(activeTaskId || "");
-  const { data: report, isLoading: reportLoading } = useReportByTask(activeTaskId || "");
+  const { data: workflowRuns } = useWorkflowRuns(activeTaskId || "");
+  // 只在任务完成后才请求报告
+  const { data: report, isLoading: reportLoading } = useReportByTask(
+    activeTask?.status === "completed" ? activeTaskId || "" : ""
+  );
   const runWorkflow = useRunWorkflow();
 
-  const [showReport, setShowReport] = useState(false);
-
-  // 任务完成后自动显示报告
+  // 如果任务状态是 created 且没有运行记录，自动触发工作流
   useEffect(() => {
-    if (activeTask?.status === "completed" && report) {
-      setShowReport(true);
+    if (activeTask?.status === "created" && workflowRuns && workflowRuns.length === 0 && !runWorkflow.isPending) {
+      runWorkflow.mutate({ task_id: activeTaskId! });
     }
-  }, [activeTask?.status, report]);
-
-  const handleRunWorkflow = async () => {
-    if (!activeTaskId) return;
-    try {
-      await runWorkflow.mutateAsync({ task_id: activeTaskId });
-    } catch (error) {
-      console.error("运行工作流失败:", error);
-    }
-  };
+  }, [activeTask?.status, workflowRuns, activeTaskId]);
 
   const handleBack = () => {
     setSearchParams({});
-    setShowReport(false);
   };
 
   // 任务详情视图
@@ -82,29 +73,8 @@ export function ResearchPage() {
           </CardContent>
         </Card>
 
-        {/* 操作区 */}
-        {activeTask.status === "pending" && (
-          <Card>
-            <CardContent className="pt-6">
-              <Button onClick={handleRunWorkflow} disabled={runWorkflow.isPending}>
-                {runWorkflow.isPending ? (
-                  <>
-                    <LoadingSpinner className="mr-2 h-4 w-4" />
-                    启动中...
-                  </>
-                ) : (
-                  <>
-                    <Play className="mr-2 h-4 w-4" />
-                    启动工作流
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 运行中状态 */}
-        {activeTask.status === "running" && (
+        {/* 运行中状态 - 包括所有中间状态 */}
+        {["created", "planning", "context_loading", "researching", "analyzing", "memory_updating", "reporting"].includes(activeTask.status) && (
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -112,7 +82,7 @@ export function ResearchPage() {
                 <div>
                   <p className="font-medium">工作流运行中...</p>
                   <p className="text-sm text-muted-foreground">
-                    Agent 正在执行研究任务，请稍候
+                    当前阶段：<StatusBadge status={activeTask.status} />
                   </p>
                 </div>
               </div>
@@ -120,8 +90,8 @@ export function ResearchPage() {
           </Card>
         )}
 
-        {/* 报告展示 */}
-        {showReport && report && (
+        {/* 报告展示 - 任务完成后显示 */}
+        {activeTask.status === "completed" && report && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -140,7 +110,7 @@ export function ResearchPage() {
         )}
 
         {/* 加载报告中 */}
-        {activeTask.status === "completed" && reportLoading && (
+        {activeTask.status === "completed" && !report && reportLoading && (
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">

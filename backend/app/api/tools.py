@@ -5,6 +5,7 @@
 
 from fastapi import APIRouter
 from app.tools.base.registry import get_tool_registry
+from app.schemas.api.common import ApiResponse
 
 router = APIRouter()
 
@@ -19,12 +20,13 @@ async def list_tools():
     local_tools = [t for t in tools if t.get("type") != "mcp"]
     mcp_tools = [t for t in tools if t.get("type") == "mcp"]
 
-    return {
+    data = {
         "total": len(tools),
         "local_count": len(local_tools),
         "mcp_count": len(mcp_tools),
         "tools": tools,
     }
+    return ApiResponse.ok(data)
 
 
 @router.get("/{tool_name}")
@@ -33,7 +35,7 @@ async def get_tool(tool_name: str):
     registry = get_tool_registry()
 
     if not registry.has_tool(tool_name):
-        return {"error": f"工具 '{tool_name}' 未注册"}
+        return ApiResponse.error(f"工具 '{tool_name}' 未注册")
 
     tool = registry.get_tool(tool_name)
-    return tool.get_metadata()
+    return ApiResponse.ok(tool.get_metadata())

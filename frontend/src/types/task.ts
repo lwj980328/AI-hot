@@ -1,5 +1,14 @@
-/** 任务状态 */
-export type TaskStatus = "pending" | "running" | "completed" | "failed";
+/** 任务状态 - 与后端 TaskStatus 枚举一致 */
+export type TaskStatus =
+  | "created"
+  | "planning"
+  | "context_loading"
+  | "researching"
+  | "analyzing"
+  | "memory_updating"
+  | "reporting"
+  | "completed"
+  | "failed";
 
 /** 任务类型 */
 export type TaskType = "research" | "daily" | "trend" | "adhoc";
