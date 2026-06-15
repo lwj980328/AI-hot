@@ -336,3 +336,146 @@
   2. 实现 MCP 连接管理、工具发现、工具调用
   3. Agent 无需修改即可通过 ToolRegistry 使用 MCP 工具
   4. 修复 M2 遗留：MAX_RESEARCH_ROUNDS 统一为配置常量
+
+---
+
+## Milestone 5: MCP 集成
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-15
+
+### 1. 核心产出 (What was done)
+* **MCP 配置模型**: `MCPServerConfig` 支持 stdio/sse/http 三种传输协议配置，Pydantic 强类型定义
+* **MCP Client 抽象层**: `BaseMCPClient` 抽象基类 + `STDIOMCPClient` 实现，基于 `mcp` 官方 Python SDK
+* **MCP Client Manager**: 单例模式管理所有 MCP Client 的生命周期（连接/断开/重连/健康检查），支持获取配置
+* **MCP Discovery Service**: 启动时自动扫描配置目录、连接 MCP Server、发现并返回工具元数据
+* **MCPTool 适配层**: 将 MCP Server 暴露的工具适配为 `BaseTool` 接口，动态生成 Pydantic input_schema，支持超时控制
+* **MCPAdapter 核心**: 协调 DiscoveryService + ClientManager + ToolRegistry，一键完成 MCP 工具注册
+* **ToolRegistry 集成**: MCP 工具与本地工具统一注册，Agent 无需感知差异
+* **ToolService 统一注册**: `register_local_tools()` 方法统一管理本地工具注册，避免 main.py 直接实例化
+* **Filesystem MCP Server 接入**: 配置 `@modelcontextprotocol/server-filesystem`，成功发现 14 个文件系统工具
+* **main.py 集成**: 启动时自动初始化 MCP 并注册工具，关闭时断开所有 MCP 连接
+* **故障隔离验证**: MCP 连接失败不影响本地工具使用
+* **依赖更新**: 新增 `mcp>=1.0.0`、`pyyaml>=6.0.0`
+* **新增 /api/v1/tools 路由**: 暴露已注册工具列表，支持 HTTP 查询
+
+### 2. 新增文件清单
+```
+backend/app/mcp/
+├── __init__.py
+├── clients/
+│   ├── __init__.py
+│   ├── base_client.py
+│   └── stdio_client.py
+├── manager/
+│   ├── __init__.py
+│   └── client_manager.py
+├── discovery/
+│   ├── __init__.py
+│   └── discovery_service.py
+├── adapters/
+│   ├── __init__.py
+│   └── mcp_adapter.py
+├── tools/
+│   ├── __init__.py
+│   └── mcp_tool.py
+└── schemas/
+    ├── __init__.py
+    ├── config.py
+    └── metadata.py
+
+backend/config/mcp/
+├── __init__.py
+└── filesystem.yaml    # 每个 MCP Server 独立配置文件
+
+backend/app/api/
+└── tools.py           # 工具列表 API
+
+backend/tests/
+├── test_mcp.py
+└── test_mcp_tool_call.py
+```
+
+### 3. 踩坑与返工记录 (Mistakes & Rework - 核心反思)
+
+**踩坑 1: Windows GBK 编码问题**
+* **问题描述**: 测试脚本中的 Unicode 字符（✓、✗、⚠）在 Windows 终端输出时报 `UnicodeEncodeError: 'gbk' codec can't encode character`
+* **根本原因**: Windows 默认使用 GBK 编码，无法处理部分 Unicode 字符
+* **最终解法**: 替换为 ASCII 字符 `[OK]`、`[FAIL]`、`[WARN]`
+
+**踩坑 2: MCP Client 连接失败未优雅处理**
+* **问题描述**: 配置不存在的命令时，`FileNotFoundError` 直接抛出导致测试中断
+* **根本原因**: `add_client()` 中未捕获 `FileNotFoundError` 异常
+* **最终解法**: 添加 `FileNotFoundError` 专门捕获，记录日志但不抛出
+
+**踩坑 3: mcp SDK 版本兼容性**
+* **问题描述**: `mcp` SDK 的 `stdio_client` 返回类型和 `ClientSession` 初始化方式需要确认
+* **根本原因**: mcp SDK 版本更新较快，API 可能有变化
+* **最终解法**: 使用 `mcp>=1.0.0`，参考官方文档实现
+
+**踩坑 4: 代码审核发现 4 个违规项（二次返工）**
+* **问题描述**: 代码审核对照 `docs/03_工具设计规范.md` 和 `docs/06_MCP设计规范.md` 发现 4 个违规
+* **违规 1 - MCPToolMetadata 缺少 output_schema**: 规范第 8 节要求包含 `output_schema: dict` 字段，实际缺失
+* **违规 3 - main.py 直接实例化工具**: 规范第 10 节禁止 `GithubTool()` 直接实例化，main.py 绕过 ToolService
+* **违规 4 - MCPTool.execute() 异常处理不统一**: 规范第 21 节要求 MCP 不可用时抛出 `ToolError`，实际返回 `MCPToolResult(success=False)`
+* **违规 5 - 配置文件结构不一致**: 规范第 23 节要求每个 MCP Server 独立配置文件，实际合并为 `servers.yaml`
+* **最终解法**:
+  - `metadata.py` 添加 `output_schema` 字段，`stdio_client.py` 提取 `tool.outputSchema`
+  - `tool_service.py` 新增 `register_local_tools()` 方法，`main.py` 改用此方法
+  - `mcp_tool.py` 删除 `MCPToolResult`，改为抛出 `ToolTimeoutError`/`ToolConnectionError`/`ToolError`
+  - 配置目录改为每个 MCP Server 独立 YAML 文件，`discovery_service.py` 支持扫描目录加载
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了两轮代码审核：
+
+* **第一轮审核** (8 个违规项):
+  - 违规 1：MCPToolMetadata 缺少 output_schema → 已修复
+  - 违规 2：MCPToolMetadata.input_schema 使用裸 dict → 可接受（MCP 协议天然结构）
+  - 违规 3：main.py 直接实例化工具 → 已修复
+  - 违规 4：MCPTool.execute() 异常处理不统一 → 已修复
+  - 违规 5：配置文件结构不一致 → 已修复
+  - 违规 6：权限控制未实现 → MVP 可推迟
+  - 违规 7：MCPClientFactory 未独立 → 功能等价
+  - 违规 8：复杂 JSON Schema 支持不足 → 等遇到问题再修
+
+* **第二轮审核** (二次验证):
+  - 4 个已修复项全部验证通过
+  - 18 项合规检查全部通过
+  - 未发现新违规项
+  - 发现 2 处规范文档自身措辞不一致（非代码问题）
+
+* **教训**: 第一轮审核发现的 4 个必须修复项，都是对设计规范理解不深导致的。开发时必须逐条对照规范实现，不能凭记忆或经验
+
+### 5. 验收测试结果
+
+| 验收项 | 结果 | 说明 |
+|--------|------|------|
+| 加载并连接 MCP Server (STDIO) | ✅ | Filesystem MCP Server 成功连接 |
+| 自动发现 MCP 工具 | ✅ | 发现 14 个文件系统工具 |
+| MCP Tool 注册到 ToolRegistry | ✅ | 14 个工具全部注册，命名格式 `mcp_{server_id}_{tool_name}` |
+| Agent 能够调用 MCP Tool | ✅ | `list_directory` 工具成功列出项目目录 |
+| MCP 故障不影响本地工具 | ✅ | 连接失败时本地 ArxivTool 仍可用 |
+| 超时控制 | ✅ | 使用 `asyncio.wait_for()` 实现，默认 30 秒 |
+| 统一异常体系 | ✅ | 抛出 `ToolTimeoutError`/`ToolConnectionError`/`ToolError` |
+
+### 6. 架构妥协 (Technical Debt)
+* **仅实现 STDIO 传输**: SSE 和 HTTP 传输协议暂未实现，标记为 TODO
+* **MCP 工具权限控制未实现**: 设计规范中的 `ToolPermission` 枚举暂未接入
+* **MCP 工具监控指标未实现**: 调用次数、成功率、响应时间等指标暂未记录
+* **MCP Server 健康检查未定期执行**: 仅在启动时连接，运行中不主动检测连接状态
+* **复杂 JSON Schema 类型支持不足**: `_build_input_schema()` 仅支持基础类型映射，不支持 `$ref`、`oneOf`、`allOf` 等
+* **M2 遗留未修复**: MAX_RESEARCH_ROUNDS 重复定义（不在 M5 范围内）
+
+### 7. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: MCP 配置文件每个 Server 独立一个 YAML 文件，放置在 `backend/config/mcp/` 目录
+* **防错规则 2**: MCP 工具调用失败必须抛出 `ToolError` 子类，不能返回带 error 的结果对象，确保与本地工具异常处理模式一致
+* **防错规则 3**: MCP Client 断开连接时必须清理 `AsyncExitStack`，避免资源泄漏
+* **防错规则 4**: 工具注册必须通过 `ToolService.register_local_tools()` 或 `MCPAdapter.init_and_register()`，禁止在 main.py 中直接实例化工具
+* **防错规则 5**: 开发新模块时必须逐条对照设计规范实现，不能凭记忆或经验；代码审核必须覆盖完整调用链
+* **架构红线 1**: Agent 通过 ToolRegistry 使用 MCP 工具，禁止直接访问 MCPClient
+* **架构红线 2**: MCP 连接失败不应阻断应用启动，必须降级处理（仅本地工具可用）
+* **衔接提醒**: 进入 M6 前端 MVP 前，需要：
+  1. 前端框架搭建（React + Vite + TypeScript + TailwindCSS）
+  2. API 接入层（TanStack Query）
+  3. 页面路由（Dashboard / Research Workspace / Reports）

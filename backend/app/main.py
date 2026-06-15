@@ -3,13 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from app.db.session import engine
 from app.db.base import Base
-from app.api import tasks, workflows, reports
+from app.api import tasks, workflows, reports, tools
 from app.memory.memory_service import MemoryService
-from app.tools.base.registry import ToolRegistry
-from app.tools.arxiv import ArxivTool
-from app.tools.github import GithubTool
-from app.tools.web import WebSearchTool
-from app.tools.huggingface import HuggingFaceTool
+from app.tools.base.tool_service import get_tool_service
+from app.mcp import get_mcp_adapter
 
 # 配置应用日志：显示 INFO 级别，格式简洁
 logging.basicConfig(
@@ -23,17 +20,30 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def _register_tools():
-    """注册所有本地工具到 ToolRegistry
+async def _register_tools():
+    """注册所有工具到 ToolRegistry
 
     在应用启动时调用，确保 ToolService 可以找到所有工具。
+    包括本地工具和 MCP 工具。
+
+    遵循 docs/03_工具设计规范.md，通过 ToolService 统一管理工具注册，
+    避免直接实例化具体工具类。
     """
-    registry = ToolRegistry()
-    registry.register(ArxivTool())
-    registry.register(GithubTool())
-    registry.register(WebSearchTool())
-    registry.register(HuggingFaceTool())
-    logger.info("工具注册完成")
+    tool_service = get_tool_service()
+
+    # 注册本地工具（通过 ToolService 统一管理）
+    tool_service.register_local_tools()
+
+    # 注册 MCP 工具
+    mcp_adapter = get_mcp_adapter()
+    try:
+        mcp_count = await mcp_adapter.init_and_register()
+        logger.info(f"MCP 工具注册完成，共 {mcp_count} 个")
+    except Exception as e:
+        logger.error(f"MCP 工具注册失败: {e}")
+        # MCP 失败不影响本地工具使用
+
+    logger.info("工具注册流程完成")
 
 
 @asynccontextmanager
@@ -46,10 +56,16 @@ async def lifespan(app: FastAPI):
     memory_service = MemoryService()
     await memory_service.init()
 
-    # Startup: 注册所有工具到 ToolRegistry
-    _register_tools()
+    # Startup: 注册所有工具到 ToolRegistry (包括 MCP 工具)
+    await _register_tools()
 
     yield
+
+    # Shutdown: 断开所有 MCP 连接
+    from app.mcp import get_mcp_client_manager
+    client_manager = get_mcp_client_manager()
+    await client_manager.disconnect_all()
+    logger.info("MCP 连接已断开")
 
     # Shutdown: 关闭数据库连接
     await engine.dispose()
@@ -66,6 +82,7 @@ app = FastAPI(
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
+app.include_router(tools.router, prefix="/api/v1/tools", tags=["Tools"])
 
 
 @app.get("/health")

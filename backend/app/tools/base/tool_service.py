@@ -102,6 +102,33 @@ class ToolService:
         """列出所有可用工具"""
         return self.registry.list_tools()
 
+    def register_local_tools(self) -> int:
+        """注册所有本地工具
+
+        遵循 docs/03_工具设计规范.md，统一管理工具注册。
+        避免在 main.py 中直接实例化具体工具。
+
+        Returns:
+            注册的工具数量
+        """
+        from app.tools.arxiv import ArxivTool
+        from app.tools.github import GithubTool
+        from app.tools.web import WebSearchTool
+        from app.tools.huggingface import HuggingFaceTool
+
+        tools = [
+            ArxivTool(),
+            GithubTool(),
+            WebSearchTool(),
+            HuggingFaceTool(),
+        ]
+
+        for tool in tools:
+            self.registry.register(tool)
+
+        logger.info(f"本地工具注册完成，共 {len(tools)} 个")
+        return len(tools)
+
 
 def get_tool_service() -> ToolService:
     """获取 ToolService 单例"""
