@@ -479,3 +479,134 @@ backend/tests/
   1. 前端框架搭建（React + Vite + TypeScript + TailwindCSS）
   2. API 接入层（TanStack Query）
   3. 页面路由（Dashboard / Research Workspace / Reports）
+
+---
+
+## Milestone 6: 前端 MVP
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-15
+
+### 1. 核心产出 (What was done)
+* **前端框架搭建**: React 19 + Vite + TypeScript + TailwindCSS v4
+* **UI 组件库**: 基于 Shadcn/UI 规范实现 Button、Card、Input、Badge、Select、Textarea 等组件
+* **状态管理**: Zustand + TanStack Query 实现数据获取和缓存
+* **API 接入层**: 完整的 API 客户端和接口定义（taskApi、workflowApi、reportApi、toolApi、healthApi）
+* **布局系统**: AppLayout + Sidebar + Header 响应式布局
+* **页面实现**:
+  - Dashboard: 统计卡片、快速研究表单、最近任务列表
+  - Research: 任务创建、任务列表、任务详情、工作流触发、报告展示
+  - Reports: 报告列表、报告查看器（Markdown 渲染）
+  - Settings: 系统状态、配置信息
+* **路由配置**: React Router v7 实现页面导航
+* **后端 CORS**: FastAPI CORS 中间件配置，允许前端开发服务器访问
+* **Vite 代理**: 开发环境 API 代理配置，避免跨域问题
+
+### 2. 新增文件清单
+```
+frontend/
+├── src/
+│   ├── api/
+│   │   ├── client.ts           # Axios 实例
+│   │   ├── taskApi.ts          # 任务 API
+│   │   ├── workflowApi.ts      # 工作流 API
+│   │   ├── reportApi.ts        # 报告 API
+│   │   ├── toolApi.ts          # 工具 API
+│   │   └── healthApi.ts        # 健康检查 API
+│   ├── components/
+│   │   ├── ui/                 # Shadcn/UI 组件
+│   │   │   ├── button.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── select.tsx
+│   │   │   └── textarea.tsx
+│   │   ├── layout/
+│   │   │   ├── AppLayout.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── Header.tsx
+│   │   └── shared/
+│   │       ├── StatusBadge.tsx
+│   │       ├── LoadingSpinner.tsx
+│   │       └── EmptyState.tsx
+│   ├── pages/
+│   │   ├── dashboard/DashboardPage.tsx
+│   │   ├── research/ResearchPage.tsx
+│   │   ├── reports/ReportListPage.tsx
+│   │   └── settings/SettingsPage.tsx
+│   ├── features/
+│   │   ├── research/
+│   │   │   ├── TaskForm.tsx
+│   │   │   ├── TaskList.tsx
+│   │   │   └── TaskCard.tsx
+│   │   └── reports/
+│   │       └── ReportViewer.tsx
+│   ├── hooks/
+│   │   ├── useTasks.ts
+│   │   ├── useReports.ts
+│   │   ├── useWorkflows.ts
+│   │   └── useHealth.ts
+│   ├── stores/                 # 预留
+│   ├── types/
+│   │   ├── task.ts
+│   │   ├── workflow.ts
+│   │   ├── report.ts
+│   │   ├── tool.ts
+│   │   └── api.ts
+│   ├── utils/
+│   │   ├── cn.ts               # className 合并
+│   │   ├── format.ts           # 格式化工具
+│   │   └── status.ts           # 状态配置
+│   ├── routes/index.tsx
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css               # TailwindCSS + 主题变量
+├── vite.config.ts
+├── tsconfig.json
+├── tsconfig.app.json
+└── package.json
+```
+
+### 3. 踩坑与返工记录 (Mistakes & Rework)
+**踩坑 1: TypeScript 7.0 废弃 baseUrl**
+* **问题描述**: `tsconfig.app.json` 中的 `baseUrl` 选项在 TypeScript 7.0 中被废弃
+* **最终解法**: 移除 `baseUrl`，仅保留 `paths` 配置
+
+**踩坑 2: 未使用的导入导致构建失败**
+* **问题描述**: 多个文件中存在未使用的导入（Wrench、Badge、EmptyState）
+* **最终解法**: 移除未使用的导入
+
+**踩坑 3: CSS 类型声明缺失**
+* **问题描述**: `import './index.css'` 缺少类型声明
+* **最终解法**: 创建 `vite-env.d.ts` 文件引用 Vite 类型
+
+### 4. 验收测试结果
+
+| 验收项 | 结果 | 说明 |
+|--------|------|------|
+| 前端项目可启动 | ✅ | `npm run dev` 正常运行 |
+| Dashboard 显示统计 | ✅ | 调用 API 展示任务数、系统状态 |
+| 创建研究任务 | ✅ | 输入主题，点击按钮，任务创建成功 |
+| 触发 Workflow | ✅ | 任务创建后自动触发工作流 |
+| 查看任务列表 | ✅ | 展示历史任务及状态 |
+| 查看报告 | ✅ | 点击任务查看 Markdown 报告 |
+| API 联调 | ✅ | 前后端通信正常（Vite 代理） |
+| TypeScript 构建 | ✅ | 无类型错误 |
+| 生产构建 | ✅ | `npm run build` 成功 |
+
+### 5. 架构妥协 (Technical Debt)
+* **WebSocket 未实现**: 任务状态通过轮询更新，非实时
+* **用户认证未实现**: MVP 阶段暂不支持多用户
+* **响应式基础**: 优先桌面端，移动端体验待优化
+* **状态管理简化**: Zustand Store 预留但未大量使用，TanStack Query 已足够
+* **无单元测试**: MVP 阶段优先功能实现，测试后续补充
+
+### 6. 后续开发的硬性规则 (Rules for Next Steps)
+* **防错规则 1**: 前端组件使用 `@/` 路径别名，避免相对路径混乱
+* **防错规则 2**: 数据获取统一使用 TanStack Query，禁止 useEffect + fetch
+* **防错规则 3**: 样式使用 TailwindCSS 工具类，避免自定义 CSS
+* **防错规则 4**: 组件拆分遵循 features/ 目录结构，保持页面组件简洁
+* **衔接提醒**: 进入 M7 Workflow 可视化前，需要：
+  1. 安装 ReactFlow 依赖
+  2. 设计 Workflow 节点和边的数据结构
+  3. 实现 WorkflowCanvas 组件
+  4. 与后端 WebSocket 或轮询机制对接

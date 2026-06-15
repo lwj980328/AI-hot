@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine
 from app.db.base import Base
 from app.api import tasks, workflows, reports, tools
@@ -76,6 +77,15 @@ app = FastAPI(
     description="AI前沿热点研究智能体",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# CORS 配置 - 允许前端开发服务器访问
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 注册路由 - 使用 /api/v1 前缀
