@@ -171,6 +171,7 @@ export function ResearchPage() {
               <WorkflowCanvas
                 nodeStates={workflowStatus.node_states}
                 toolCalls={workflowStatus.tool_calls || []}
+                nodeLogs={workflowStatus.node_logs || []}
               />
             </CardContent>
           </Card>

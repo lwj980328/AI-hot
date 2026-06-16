@@ -26,6 +26,9 @@ class WorkflowContext:
     # 工具调用记录保存回调
     tool_calls_callback: Callable[[str, list], Awaitable[None]] | None = None
 
+    # 节点执行日志保存回调
+    node_log_callback: Callable[[str, str, str, str, int], Awaitable[None]] | None = None
+
     async def update_status(self, status: str) -> None:
         """更新任务状态"""
         if self.status_callback and self.task_id:
@@ -41,3 +44,19 @@ class WorkflowContext:
                 await self.tool_calls_callback(self.task_id, tool_calls)
             except Exception as e:
                 logger.warning(f"保存工具调用记录失败: {e}")
+
+    async def save_node_log(
+        self,
+        node_name: str,
+        input_summary: str,
+        output_summary: str,
+        duration_ms: int = 0,
+    ) -> None:
+        """保存节点执行日志"""
+        if self.node_log_callback and self.task_id:
+            try:
+                await self.node_log_callback(
+                    self.task_id, node_name, input_summary, output_summary, duration_ms
+                )
+            except Exception as e:
+                logger.warning(f"保存节点执行日志失败: {e}")

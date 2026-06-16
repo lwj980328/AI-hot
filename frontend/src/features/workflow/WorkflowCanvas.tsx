@@ -21,7 +21,7 @@ import { MemoryNode } from "./nodes/MemoryNode";
 import { ReportNode } from "./nodes/ReportNode";
 import { LoopEdge } from "./edges/LoopEdge";
 import { NodeDetailPanel } from "./panels/NodeDetailPanel";
-import type { NodeStatus, ToolCallRecord } from "@/types/workflow";
+import type { NodeStatus, ToolCallRecord, NodeExecutionLog } from "@/types/workflow";
 
 /** 自定义节点类型 */
 const nodeTypes: NodeTypes = {
@@ -61,6 +61,7 @@ const nodeLabels: Record<string, string> = {
 interface WorkflowCanvasProps {
   nodeStates: Record<string, NodeStatus>;
   toolCalls: ToolCallRecord[];
+  nodeLogs?: NodeExecutionLog[];
 }
 
 /** 构建初始节点 */
@@ -196,6 +197,7 @@ function buildEdges(nodeStates: Record<string, NodeStatus>): Edge[] {
 export function WorkflowCanvas({
   nodeStates,
   toolCalls,
+  nodeLogs = [],
 }: WorkflowCanvasProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
@@ -228,6 +230,11 @@ export function WorkflowCanvas({
     ? toolCalls.filter((call) => call.node_name === selectedNodeId)
     : [];
 
+  // 选中节点的执行日志
+  const selectedNodeLog = selectedNodeId
+    ? nodeLogs.find((log) => log.node_name === selectedNodeId)
+    : undefined;
+
   return (
     <div className="relative w-full h-[600px] border rounded-lg bg-background">
       <ReactFlow
@@ -252,10 +259,12 @@ export function WorkflowCanvas({
           <NodeDetailPanel
             nodeLabel={nodeLabels[selectedNode.id] || selectedNode.id}
             nodeDescription={nodeDescriptions[selectedNode.id] || ""}
+            nodeId={selectedNode.id}
             status={
               (selectedNode.data.status as NodeStatus) || "pending"
             }
             toolCalls={selectedToolCalls}
+            nodeLog={selectedNodeLog}
             onClose={() => setSelectedNodeId(null)}
           />
         </div>

@@ -35,6 +35,15 @@ export interface ToolCallRecord {
   called_at: string;
 }
 
+/** 节点执行日志 - 与后端 NodeExecutionLog 一致 */
+export interface NodeExecutionLog {
+  node_name: string;
+  input_summary: string;
+  output_summary: string;
+  duration_ms: number;
+  created_at: string;
+}
+
 /** 工作流状态响应 - 与后端 get_workflow_status 返回一致 */
 export interface WorkflowStatusResponse {
   task_id: string;
@@ -42,6 +51,7 @@ export interface WorkflowStatusResponse {
   current_node: string;
   node_states: Record<string, NodeStatus>;
   tool_calls?: ToolCallRecord[];
+  node_logs?: NodeExecutionLog[];
 }
 
 /** 节点元数据 */

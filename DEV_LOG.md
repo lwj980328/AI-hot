@@ -874,12 +874,15 @@ frontend/src/
   - EmptyState 组件优化（支持操作按钮）
 * **Settings 动态化**: 从后端获取真实工具数量和系统状态
 * **记忆召回修复**: 移除 topic 精确过滤，改为纯语义搜索，解决 PlannerAgent 提炼 topic 不一致导致的记忆召回失败
+* **节点执行日志**: 新增 node_execution_logs 表，记录每个节点的输入/输出摘要和执行耗时，前端点击节点可查看处理结果
 
 ### 2. 新增文件清单
 ```
 backend/app/
 ├── api/memories.py                    # 记忆 API 路由
-└── schemas/api/memory_response.py     # 记忆响应模型
+├── schemas/api/memory_response.py     # 记忆响应模型
+├── db/models/node_execution_log.py    # 节点执行日志表
+└── repositories/node_execution_log_repo.py  # 节点执行日志仓储
 
 frontend/src/
 ├── types/memory.ts                    # 记忆类型定义
@@ -892,6 +895,8 @@ frontend/src/
 │   ├── MemoryDetail.tsx               # 记忆详情组件
 │   ├── MemoryList.tsx                 # 记忆列表组件
 │   └── MemorySearch.tsx               # 语义搜索组件
+├── features/workflow/panels/
+│   └── NodeOutputCard.tsx             # 节点输出卡片组件
 ├── pages/memory/
 │   └── MemoryCenterPage.tsx           # Memory Center 页面
 └── components/ui/skeleton.tsx         # 骨架屏组件
@@ -904,15 +909,27 @@ backend/app/
 ├── agents/report_agent.py             # 报告质量优化
 ├── agents/context_agent.py            # 记忆召回修复
 ├── services/llm_service.py            # JSON 解析容错
+├── services/workflow_service.py       # 添加 node_log_callback，API 返回 node_logs
 ├── schemas/state/report_state.py      # 新增 is_fallback 字段
-└── db/models/__init__.py              # 修复 ToolExecutionLog 导入
+├── db/models/__init__.py              # 导入 NodeExecutionLog
+├── db/models/workflow_run.py          # 添加 node_logs 关系
+└── workflows/
+    ├── base/workflow_context.py       # 添加 save_node_log 回调
+    └── research/graph.py              # 节点执行完成后保存日志
 
 frontend/src/
+├── types/workflow.ts                  # 添加 NodeExecutionLog 类型
 ├── routes/index.tsx                   # 新增 /memory 路由
 ├── components/layout/Sidebar.tsx      # 新增 Memory Center 菜单
 ├── components/shared/EmptyState.tsx   # 优化空状态组件
-├── pages/dashboard/DashboardPage.tsx  # 添加页面动画
-├── pages/settings/SettingsPage.tsx    # 动态化配置
+├── features/workflow/
+│   ├── WorkflowCanvas.tsx             # 传递 nodeLogs
+│   └── panels/NodeDetailPanel.tsx     # 显示节点输出
+├── pages/
+│   ├── dashboard/DashboardPage.tsx    # 添加页面动画
+│   ├── research/ResearchPage.tsx      # 传递 nodeLogs
+│   ├── workflow/WorkflowMonitorPage.tsx  # 传递 nodeLogs
+│   └── settings/SettingsPage.tsx      # 动态化配置
 └── index.css                          # 动画样式
 ```
 
@@ -973,6 +990,8 @@ frontend/src/
 | UI 动画 | ✅ | 页面切换 fadeIn 效果，卡片悬停效果 |
 | 骨架屏 | ✅ | 数据加载时显示骨架屏占位 |
 | Settings 动态化 | ✅ | 从后端获取真实工具数量 |
+| 节点执行日志 | ✅ | 点击节点显示处理结果（topic、keywords、insights 等） |
+| 节点耗时显示 | ✅ | 节点详情面板显示执行耗时 |
 
 ### 6. 架构妥协 (Technical Debt)
 * **WebSocket 未实现**: 任务状态和记忆数据通过轮询更新

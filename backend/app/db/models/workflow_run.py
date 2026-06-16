@@ -29,3 +29,6 @@ class WorkflowRun(Base):
     tool_logs: Mapped[list["ToolExecutionLog"]] = relationship(
         back_populates="workflow_run", cascade="all, delete-orphan"
     )
+    node_logs: Mapped[list["NodeExecutionLog"]] = relationship(
+        back_populates="workflow_run", cascade="all, delete-orphan"
+    )

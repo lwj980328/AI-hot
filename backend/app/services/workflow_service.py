@@ -4,6 +4,7 @@ from app.repositories.task_repo import TaskRepository
 from app.repositories.workflow_run_repo import WorkflowRunRepository
 from app.repositories.report_repo import ReportRepository
 from app.repositories.tool_execution_log_repo import ToolExecutionLogRepository
+from app.repositories.node_execution_log_repo import NodeExecutionLogRepository
 from app.schemas.state.agent_state import TaskStatus
 from app.services.dto.task_dto import WorkflowRunDTO
 from app.services.exceptions import NotFoundError, WorkflowError
@@ -23,6 +24,7 @@ class WorkflowService:
         self.run_repo = WorkflowRunRepository(session)
         self.report_repo = ReportRepository(session)
         self.tool_log_repo = ToolExecutionLogRepository(session)
+        self.node_log_repo = NodeExecutionLogRepository(session)
 
     async def get_runs_by_task(self, task_id: str) -> list[WorkflowRunDTO]:
         """获取任务的所有运行记录"""
@@ -108,12 +110,28 @@ class WorkflowService:
                 else:
                     node_states[node_name] = "pending"
 
+        # 从 node_execution_logs 表获取节点执行详情
+        node_logs = []
+        if latest_run:
+            logs = await self.node_log_repo.get_by_workflow_run(latest_run.id)
+            node_logs = [
+                {
+                    "node_name": log.node_name,
+                    "input_summary": log.input_summary,
+                    "output_summary": log.output_summary,
+                    "duration_ms": log.duration_ms,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                }
+                for log in logs
+            ]
+
         return {
             "task_id": task_id,
             "task_status": task_status,
             "current_node": current_node,
             "node_states": node_states,
             "tool_calls": tool_calls,
+            "node_logs": node_logs,
         }
 
     async def run_task(self, task_id: str) -> WorkflowRunDTO:
@@ -163,10 +181,34 @@ class WorkflowService:
                 except Exception:
                     pass
 
+        async def save_node_log_callback(
+            tid: str, node_name: str, input_summary: str, output_summary: str, duration_ms: int
+        ) -> None:
+            try:
+                # 获取最新的工作流运行记录
+                latest_run = await self.run_repo.get_latest_by_task(tid)
+                if latest_run:
+                    await self.node_log_repo.create_log(
+                        workflow_run_id=latest_run.id,
+                        node_name=node_name,
+                        input_summary=input_summary,
+                        output_summary=output_summary,
+                        duration_ms=duration_ms,
+                    )
+                    await self.session.commit()
+                    logger.info(f"节点执行日志已保存: {node_name}")
+            except Exception as e:
+                logger.warning(f"保存节点执行日志失败: {e}")
+                try:
+                    await self.session.rollback()
+                except Exception:
+                    pass
+
         workflow_context = WorkflowContext(
             task_id=task_id,
             status_callback=update_status_callback,
             tool_calls_callback=save_tool_calls_callback,
+            node_log_callback=save_node_log_callback,
         )
         set_workflow_context(workflow_context)
 
