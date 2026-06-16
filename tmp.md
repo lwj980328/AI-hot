@@ -1,51 +1,104 @@
-研究主题研究报告
-执行摘要
-本报告对研究主题领域的最新发展进行了研究分析，涵盖了相关论文和开源项目。
-
-研究背景
-研究主题是当前AI领域的研究热点之一，受到了学术界和工业界的广泛关注。
-
-热点话题
-研究主题
-
-趋势分析
-研究主题是当前AI领域的热门研究方向。
-
-核心洞察
-研究主题发展前景广阔: 研究主题在多个应用场景中展现出巨大潜力。
-代表性论文
-相关开源项目
-fighting41love/funNLP
-中英文敏感词、语言检测、中外手机/电话归属地/运营商查询、名字推断性别、手机号抽取、身份证抽取、邮箱抽取、中日文人名库、中文缩写库、拆字词典、词汇情感值、停用词、反动词表、暴恐词表、繁简体转换、英文模拟中文发音、汪峰歌词生成器、职业名称词库、同义词库、反义词库、否定词库、汽车品牌词库、汽车零件词库、连续英文切割、各种中文词向量、公司名字大全、古诗词库、IT词库、财经词库、成语词库、地名词库、历史名 Stars: 81280
-
-Dujltqzv/Some-Many-Books
-个人收藏书籍列表　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　 Stars: 20325
-
-xuchengsheng/spring-reading
-涵盖了 Spring 框架的核心概念和关键功能，包括控制反转（IOC）容器的使用，面向切面编程（AOP）的原理与实践，事务管理的方式与实现，Spring MVC 的流程与控制器工作机制，以及 Spring 中数据访问、安全、Boot 自动配置等方面的深入研究。此外，它还包含了 Spring 事件机制的应用、高级主题如缓存抽象和响应式编程，以及对 Spring 源码的编程风格与设计模式的深入探讨。 Stars: 9918
-
-cirosantilli/x86-bare-metal-examples
-Dozens of minimal operating systems to learn x86 system programming. Tested on Ubuntu 17.10 host in QEMU 2.10 and real hardware. Userland cheat at: https://github.com/cirosantilli/linux-kernel-module- Stars: 5305
-
-cirosantilli/china-dictatorship
-反中共政治宣传库。Anti Chinese government propaganda. 住在中国真名用户的网友请别给星星，不然你要被警察请喝茶。常见问答集，新闻集和饭店和音乐建议。卐习万岁卐。冠状病毒审查郝海东新疆改造中心六四事件法轮功 996.ICU709大抓捕巴拿马文件邓家贵低端人口西藏骚乱。Friends who live in China and have real name on ac Stars: 3050
-
-gege-circle/.github
-这里是GitHub的草场，也是戈戈圈爱好者的交流地，主要讨论动漫、游戏、科技、人文、生活等所有话题，欢迎各位小伙伴们在此讨论趣事。This is GitHub grassland, and the community place for Gege circle lovers, mainly discusses anime, games, technology, lifing and other t Stars: 1916
-
-zhongmiao0706/NumberOne-MM
-Java SSM 商户管理系统 客户管理 库存管理 销售报表 项目源码 本商品卖的是源码，合适的地方直接拿来使用，不合适的根据自己的需求二次开发 系统介绍： 1.系统采用主流的 SSM 框架 jsp JSTL bootstrap html5 (PC浏览器使用) 2.springmvc +spring4.2.5+ mybaits3.3 SSM 普通java web（非maven） 数据库：mysql Stars: 743
-
-pxvr-official/1
-無許諾配信 企業理念剽窃 動物の森収益化 大神ミオ権利者削除 戌神権利侵害発言 常闇トワ炎上 夜空メルストーカー被害 建築王サポーター放置 赤十字マーク 魔乃アロエ卒業 一つの中國支持声明 大空昴3Dライブ 無限延期清掃員職業差別 日清コラボ楽曲 musedash非公開 rog案件取り消し 壁画ライブ 丁真 Ding Zhen 郑爽 Zheng Shuang 防护林 与朵小天使w 伊月猫凛 本主萌 Stars: 473
-
-cirosantilli/china-dictatroship-7
-反中共政治宣传库。Anti Chinese government propaganda. https://github.com/cirosantilli/china-dictatorship 的备份backup. 住在中国真名用户的网友请别给星星，不然你要被警察请喝茶。常见问答集，新闻集和饭店和音乐建议。卐习万岁卐。冠状病毒审查郝海东新疆改造中心六四事件法轮功 996.ICU709大抓捕巴拿马文件 Stars: 348
-
-cirosantilli/cirosantilli
-小粉红小朋友们，新issue 在这儿开： https://github.com/cirosantilli/china-dictatorship/issues # 21世纪新政宣言（2020年4月5曰笫四次修改稿)（2020年6月19曰第七次修改，以下“【】”内文字为非正文内容的说明）20世纪苏联的消亡和东欧的大变革，使这21世纪初的现中国大陆成为世界关注的最主要焦点和影响新世纪文明发展的关键。特别 Stars: 286
-
-未来展望
-研究主题领域仍有广阔的发展空间，值得持续关注和深入研究。
-
-报告生成时间: 本报告由AI Research OS自动生成
+INFO: 127.0.0.1:54996 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+14:53:29 [app.services.task_service] 创建任务: MCP生态发展趋势
+INFO: 127.0.0.1:62001 - "POST /api/v1/tasks HTTP/1.1" 200 OK
+INFO: 127.0.0.1:60881 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:64113 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:64115 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:53:30 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> planning
+14:53:31 [watchfiles.main] 5 changes detected
+INFO: 127.0.0.1:53475 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:56646 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:63752 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:58832 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:61228 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:62904 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:53:40 [app.agents.planner_agent] PlannerAgent: topic=MCP生态发展趋势, keywords=['MCP', 'Model Context Protocol', 'MCP生态', 'MCP生态趋势', 'MCP protocol development', 'MCP ecosystem', 'MCP adoption']
+14:53:40 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> context_loading
+14:53:40 [app.memory.memory_service] 记忆检索: query='MCP生态发展趋势', research=0, trend=0, insight=0
+14:53:40 [app.agents.context_agent] ContextAgent: 记忆召回为空，使用 LLM 生成上下文
+INFO: 127.0.0.1:49671 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:53904 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51821 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:53:47 [app.agents.context_agent] ContextAgent: 构建了 2 个上下文项
+14:53:47 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> researching
+14:53:47 [app.tools.arxiv.arxiv_tool] ArxivTool: 搜索 'MCP', limit=10
+INFO: 127.0.0.1:60534 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:53149 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:61320 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50739 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:62221 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:53:54 [app.agents.research_agent] ResearchAgent: arxiv_search 获取数据成功
+14:53:54 [app.tools.github.github_tool] GithubTool: 搜索 'MCP', limit=10
+INFO: 127.0.0.1:51868 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:53:55 [app.agents.research_agent] ResearchAgent: github_search 获取数据成功
+14:53:55 [app.tools.huggingface.huggingface_tool] HuggingFaceTool: 搜索 'MCP', limit=10
+14:53:56 [app.agents.research_agent] ResearchAgent: huggingface_search 获取数据成功
+14:53:56 [app.services.workflow_service] 工具调用记录已保存: 3 条
+14:53:56 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> analyzing
+INFO: 127.0.0.1:54843 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:54979 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:63406 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:65109 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:58703 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:61878 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:49852 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:60778 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50989 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:52639 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:61455 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:61340 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:55889 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:54:17 [app.agents.analysis_agent] AnalysisAgent: hot_topics=['MCP 生态标准化与行业统一', 'AI Agent 工具调用与环境交互', '科学计算与 HPC 中的 Agent 应用', '本地优先与事件驱动架构'], insights=4, need_more_data=False
+14:54:17 [app.workflows.research.graph] 研究数据充足，进入记忆写入阶段
+14:54:17 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> memory_updating
+14:54:17 [app.memory.memory_service] 保存 TrendSnapshot: id=18c4f9e0-0568-4fee-bda1-b2141334bfff, topic=MCP生态发展趋势
+14:54:17 [app.memory.memory_service] 保存 InsightMemory: id=7735d14b-f150-4bd6-a234-6a9c757d804d, title=MCP 正成为 AI Agent 工具调用的核心标准
+14:54:17 [app.memory.memory_service] 保存 InsightMemory: id=e760282a-697b-45c9-82ff-ae37a72c5796, title=Agent 在科学研究和 HPC 中的需求推动 MCP 扩展
+14:54:17 [app.memory.memory_service] 保存 InsightMemory: id=3329f710-6304-4853-a864-5a6528ee107a, title=本地优先与事件驱动架构成为 Agent 记忆与协作的关键模式
+14:54:17 [app.memory.memory_service] 保存 InsightMemory: id=06a62080-6a05-4d48-8afd-706b70ecfcb6, title=Agent 评估与安全仍需标准化，MCP 可为此提供底层支持
+14:54:17 [app.agents.memory_agent] MemoryAgent: 写入 5 条记忆, topic=MCP生态发展趋势
+14:54:17 [app.services.workflow_service] 任务状态已更新: f80a1138-993b-45d4-aaed-43bdb4f15a21 -> reporting
+INFO: 127.0.0.1:59831 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:54547 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50188 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51602 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:65195 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:54986 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:53717 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:65405 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:56644 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:59986 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:62198 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:55590 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:65054 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:59648 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50175 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:63775 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51912 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50765 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50062 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51318 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:56212 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51893 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:58858 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:49300 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:57035 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:63162 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:53875 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:58846 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:64452 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:56307 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:54591 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50662 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:55296 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:50945 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:57376 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+14:55:12 [app.services.workflow_service] 工作流执行完成: task_id=f80a1138-993b-45d4-aaed-43bdb4f15a21, report_title=MCP生态演进与AI Agent标准化趋势, report_summary_len=98, report_content_len=3619
+14:55:12 [app.services.workflow_service] 报告已保存: report_id=1858fbc4-298d-4c71-a964-2063a6c98413
+14:55:12 [app.services.workflow_service] 工作流执行成功: f80a1138-993b-45d4-aaed-43bdb4f15a21
+INFO: 127.0.0.1:55799 - "GET /api/v1/workflows/status/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:56481 - "GET /api/v1/tasks/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:55498 - "GET /api/v1/reports/by-task/f80a1138-993b-45d4-aaed-43bdb4f15a21 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:54560 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51973 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK
+INFO: 127.0.0.1:51423 - "GET /api/v1/tasks?limit=50&offset=0 HTTP/1.1" 200 OK

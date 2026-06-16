@@ -73,7 +73,7 @@ export function DashboardPage() {
   const isHealthy = health?.status === "ok";
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       {/* 页面标题 */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>

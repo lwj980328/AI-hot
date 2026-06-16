@@ -1,8 +1,9 @@
 import { useHealth } from "@/hooks/useHealth";
+import { useTools } from "@/hooks/useTools";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Database, Server, Cpu } from "lucide-react";
+import { Activity, Database, Server, Cpu, Brain } from "lucide-react";
 
 /** 系统信息卡片 */
 function SystemInfoCard({
@@ -53,10 +54,13 @@ function SystemInfoCard({
 
 /** 设置页面 */
 export function SettingsPage() {
-  const { data: health, isLoading } = useHealth();
+  const { data: health, isLoading: healthLoading } = useHealth();
+  const { data: tools, isLoading: toolsLoading } = useTools();
+
+  const isLoading = healthLoading || toolsLoading;
 
   return (
-    <div className="space-y-6">
+    <div className="page-enter space-y-6">
       {/* 页面标题 */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight">设置</h2>
@@ -91,8 +95,16 @@ export function SettingsPage() {
             title="数据库"
             icon={Database}
             items={[
-              { label: "PostgreSQL", value: "已连接" },
-              { label: "Qdrant", value: "已连接" },
+              {
+                label: "PostgreSQL",
+                value: health?.status === "ok" ? "已连接" : "未知",
+                status: health?.status === "ok" ? "ok" : "error",
+              },
+              {
+                label: "Qdrant",
+                value: health?.status === "ok" ? "已连接" : "未知",
+                status: health?.status === "ok" ? "ok" : "error",
+              },
             ]}
           />
 
@@ -101,8 +113,18 @@ export function SettingsPage() {
             title="工具系统"
             icon={Server}
             items={[
-              { label: "本地工具", value: "4 个" },
-              { label: "MCP 工具", value: "14 个" },
+              {
+                label: "本地工具",
+                value: tools ? `${tools.local_count} 个` : "加载中...",
+              },
+              {
+                label: "MCP 工具",
+                value: tools ? `${tools.mcp_count} 个` : "加载中...",
+              },
+              {
+                label: "工具总数",
+                value: tools ? `${tools.total} 个` : "加载中...",
+              },
             ]}
           />
 
@@ -112,11 +134,55 @@ export function SettingsPage() {
             icon={Cpu}
             items={[
               { label: "LLM", value: "GPT-4" },
-              { label: "Embedding", value: "text-embedding-3-small" },
+              { label: "Embedding", value: "BAAI/bge-small-zh-v1.5" },
             ]}
           />
         </div>
       )}
+
+      {/* 技术栈 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            技术栈
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium">后端</h4>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="outline">FastAPI</Badge>
+                <Badge variant="outline">LangGraph</Badge>
+                <Badge variant="outline">PydanticAI</Badge>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium">前端</h4>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="outline">React</Badge>
+                <Badge variant="outline">TypeScript</Badge>
+                <Badge variant="outline">TailwindCSS</Badge>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium">数据库</h4>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="outline">PostgreSQL</Badge>
+                <Badge variant="outline">Qdrant</Badge>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-medium">可视化</h4>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="outline">ReactFlow</Badge>
+                <Badge variant="outline">Zustand</Badge>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 关于 */}
       <Card>

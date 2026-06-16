@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine
 from app.db.base import Base
-from app.api import tasks, workflows, reports, tools
+from app.api import tasks, workflows, reports, tools, memories
 from app.memory.memory_service import MemoryService
 from app.tools.base.tool_service import get_tool_service
 from app.mcp import get_mcp_adapter
@@ -93,6 +93,7 @@ app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["Workflows"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(tools.router, prefix="/api/v1/tools", tags=["Tools"])
+app.include_router(memories.router, prefix="/api/v1/memories", tags=["Memories"])
 
 
 @app.get("/health")

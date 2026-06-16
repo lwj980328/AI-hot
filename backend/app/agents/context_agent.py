@@ -66,11 +66,14 @@ class ContextAgent:
         """从记忆系统召回历史上下文
 
         搜索三类记忆，按相关性转换为 ContextItem。
+        不使用 topic 过滤，依赖语义搜索找到相关记忆。
         """
         try:
+            # 使用用户查询进行语义搜索，不使用 topic 精确过滤
+            # 因为 PlannerAgent 提炼的 topic 可能与保存时不同
             results = await self.memory_service.search_memories(
                 query=topic,
-                topic=topic,
+                topic=None,  # 不使用 topic 过滤，依赖语义搜索
                 limit=3,
             )
         except Exception as e:

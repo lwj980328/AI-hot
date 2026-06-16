@@ -849,3 +849,146 @@ frontend/src/
   2. 完善 Memory Center 页面
   3. 优化 UI 交互和动画
   4. 补充单元测试
+
+---
+
+## Milestone 8: 最终展示版
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-16
+
+### 1. 核心产出 (What was done)
+* **Memory Center 页面**: 新增 `/memory` 路由，展示三类记忆（Research、Trend、Insight），支持语义搜索和类型筛选
+* **记忆 API**: 新增 `/api/v1/memories` 路由，包括搜索、列表、统计接口
+* **语义搜索**: 前端集成 MemoryService.search_memories，支持跨 Collection 语义检索
+* **报告质量优化**:
+  - 添加 System Prompt 强化报告专业性
+  - 利用 HuggingFace Model 数据（修复 ModelRecord 属性名）
+  - JSON 解析容错（支持 markdown 代码块包裹）
+  - 降级报告优化（按置信度排序、统计数据、更详细的内容）
+  - 新增 is_fallback 字段标识降级报告
+  - 温度参数优化（0.7 → 0.3）
+* **UI 优化**:
+  - 新增骨架屏组件（Skeleton、CardSkeleton、ListSkeleton、StatCardsSkeleton）
+  - 页面过渡动画（fadeIn 效果）
+  - 卡片悬停效果（card-hover 类）
+  - EmptyState 组件优化（支持操作按钮）
+* **Settings 动态化**: 从后端获取真实工具数量和系统状态
+* **记忆召回修复**: 移除 topic 精确过滤，改为纯语义搜索，解决 PlannerAgent 提炼 topic 不一致导致的记忆召回失败
+
+### 2. 新增文件清单
+```
+backend/app/
+├── api/memories.py                    # 记忆 API 路由
+└── schemas/api/memory_response.py     # 记忆响应模型
+
+frontend/src/
+├── types/memory.ts                    # 记忆类型定义
+├── api/memoryApi.ts                   # 记忆 API 客户端
+├── hooks/
+│   ├── useMemories.ts                 # 记忆数据 Hook
+│   └── useTools.ts                    # 工具数据 Hook
+├── features/memory/
+│   ├── MemoryCard.tsx                 # 记忆卡片组件
+│   ├── MemoryDetail.tsx               # 记忆详情组件
+│   ├── MemoryList.tsx                 # 记忆列表组件
+│   └── MemorySearch.tsx               # 语义搜索组件
+├── pages/memory/
+│   └── MemoryCenterPage.tsx           # Memory Center 页面
+└── components/ui/skeleton.tsx         # 骨架屏组件
+```
+
+### 3. 修改文件清单
+```
+backend/app/
+├── main.py                            # 注册 memories 路由
+├── agents/report_agent.py             # 报告质量优化
+├── agents/context_agent.py            # 记忆召回修复
+├── services/llm_service.py            # JSON 解析容错
+├── schemas/state/report_state.py      # 新增 is_fallback 字段
+└── db/models/__init__.py              # 修复 ToolExecutionLog 导入
+
+frontend/src/
+├── routes/index.tsx                   # 新增 /memory 路由
+├── components/layout/Sidebar.tsx      # 新增 Memory Center 菜单
+├── components/shared/EmptyState.tsx   # 优化空状态组件
+├── pages/dashboard/DashboardPage.tsx  # 添加页面动画
+├── pages/settings/SettingsPage.tsx    # 动态化配置
+└── index.css                          # 动画样式
+```
+
+### 4. 踩坑与返工记录 (Mistakes & Rework)
+
+**踩坑 1: created_at 字段解析失败**
+* **问题描述**: 前端访问 Memory Center 返回 500 错误，Pydantic 报错 `Input should be a valid datetime or date, input is too short`
+* **根本原因**: Qdrant 返回的 `created_at` 字段是空字符串，Pydantic 无法解析为 datetime
+* **最终解法**: `MemoryItemResponse.created_at` 改为 `datetime | None`，`_to_memory_item` 中处理空字符串
+
+**踩坑 2: Qdrant 返回数据结构不匹配**
+* **问题描述**: 统计显示有数据（趋势快照：1，洞察记忆：3），但列表显示"暂无记忆数据"
+* **根本原因**: `memory_service.search_memories` 返回 `{"id": ..., "score": ..., "payload": {...}}` 格式，但 `_to_memory_item` 期望 payload 内容直接在顶层
+* **最终解法**: `_to_memory_item` 先提取 `data.get("payload", data)`，再构建响应
+
+**踩坑 3: 点击记忆后全部变灰**
+* **问题描述**: 选择"全部"后显示记忆，点击某个记忆后所有记忆变灰且无法再次点击
+* **根本原因**: `created_at` 为 undefined 时，`new Date(undefined).getTime()` 返回 NaN，导致排序失败
+* **最终解法**: 排序时处理 `created_at` 为空的情况，默认为 0
+
+**踩坑 4: ModelRecord 属性名错误**
+* **问题描述**: 报告生成失败，日志显示 `'ModelRecord' object has no attribute 'model_id'`
+* **根本原因**: `ModelRecord` 继承自 `SourceDocument`，属性名是 `title` 和 `summary`，不是 `model_id` 和 `description`
+* **最终解法**: 修改 `_generate_default_report` 和 prompt 中的 `m.model_id` → `m.title`，`m.description` → `m.summary`
+
+**踩坑 5: 报告保存后内容为空**
+* **问题描述**: 新任务执行后报告不显示，数据库中 `summary` 和 `markdown_content` 为空字符串
+* **根本原因**: ReportNode 异常导致报告未生成，但异常被吞掉，workflow 继续执行并保存了空报告
+* **最终解法**: 修复 ModelRecord 属性名后，报告生成正常
+
+**踩坑 6: ToolExecutionLog 导入缺失**
+* **问题描述**: SQLAlchemy 报错 `expression 'ToolExecutionLog' failed to locate a name`
+* **根本原因**: `db/models/__init__.py` 中没有导入 `ToolExecutionLog`，导致 `WorkflowRun` 的关系无法解析
+* **最终解法**: 在 `__init__.py` 中添加 `from app.db.models.tool_execution_log import ToolExecutionLog`
+
+**踩坑 7: 记忆召回为空**
+* **问题描述**: 之前研究过的主题，再次研究时 ContextAgent 显示"记忆召回为空"
+* **根本原因**: ContextAgent 使用 `topic=topic` 精确过滤，但 PlannerAgent 提炼的 topic 可能与保存时不同（如 "MCP生态发展趋势" → "MCP生态"）
+* **最终解法**: 移除 topic 精确过滤，改为 `topic=None`，只依赖语义搜索
+
+**踩坑 8: 前端 created_at 类型不匹配**
+* **问题描述**: TypeScript 报错，`created_at` 类型不匹配
+* **根本原因**: 后端改为 `datetime | None`，前端类型还是 `string`
+* **最终解法**: 前端 `MemoryItem.created_at` 改为 `string | undefined`，组件条件渲染时间
+
+### 5. 验收测试结果
+
+| 验收项 | 结果 | 说明 |
+|--------|------|------|
+| Memory Center 页面 | ✅ | `/memory` 路由可访问，展示三类记忆 |
+| 语义搜索 | ✅ | 输入查询后返回相关记忆，按相似度排序 |
+| 记忆详情 | ✅ | 点击记忆卡片显示详情 |
+| 记忆统计 | ✅ | 显示各类型记忆数量 |
+| 报告生成 | ✅ | LLM 生成报告包含 Model 数据，结构完整 |
+| 记忆召回 | ✅ | 相同主题再次研究时能召回历史记忆 |
+| 降级提示 | ✅ | is_fallback 字段标识降级报告 |
+| JSON 容错 | ✅ | 支持 markdown 代码块包裹的 JSON |
+| UI 动画 | ✅ | 页面切换 fadeIn 效果，卡片悬停效果 |
+| 骨架屏 | ✅ | 数据加载时显示骨架屏占位 |
+| Settings 动态化 | ✅ | 从后端获取真实工具数量 |
+
+### 6. 架构妥协 (Technical Debt)
+* **WebSocket 未实现**: 任务状态和记忆数据通过轮询更新
+* **用户认证未实现**: MVP 阶段暂不支持多用户
+* **记忆数据依赖**: Memory Center 需要先运行研究任务才有数据展示
+* **无单元测试**: MVP 阶段优先功能实现
+
+### 7. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: 新增 API 路由必须在 main.py 中注册
+* **防错规则 2**: 前端新增页面必须在 routes/index.tsx 和 Sidebar.tsx 中配置
+* **防错规则 3**: 使用骨架屏组件提升加载体验
+* **防错规则 4**: 页面组件添加 page-enter 类实现过渡动画
+* **防错规则 5**: JSON 解析必须使用 LLMService._parse_json_content() 容错方法
+* **防错规则 6**: Pydantic 模型的 datetime 字段必须处理空字符串情况
+* **防错规则 7**: Qdrant 返回数据需要先提取 payload 再使用
+* **防错规则 8**: 记忆搜索不使用 topic 精确过滤，依赖语义搜索
+* **架构红线 1**: Memory API 通过 MemoryService 访问 Qdrant，禁止直接操作
+* **架构红线 2**: 前端数据获取统一使用 TanStack Query，禁止 useEffect + fetch

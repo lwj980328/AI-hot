@@ -56,11 +56,55 @@ class LLMService:
         system_prompt: str = "",
         temperature: float = 0.7,
     ) -> dict:
-        """调用LLM获取JSON响应"""
+        """调用LLM获取JSON响应
+
+        支持容错解析：如果 LLM 返回的内容包含 markdown 代码块包裹的 JSON，
+        会自动提取代码块内的内容后再解析。
+        """
         content = await self.chat(
             prompt=prompt,
             system_prompt=system_prompt,
             temperature=temperature,
             json_mode=True,
         )
-        return json.loads(content)
+
+        # 容错解析：提取 ```json ... ``` 代码块内的内容
+        return self._parse_json_content(content)
+
+    @staticmethod
+    def _parse_json_content(content: str) -> dict:
+        """解析 JSON 内容，支持 markdown 代码块包裹
+
+        Args:
+            content: LLM 返回的内容，可能是纯 JSON 或 markdown 代码块包裹的 JSON
+
+        Returns:
+            解析后的字典
+
+        Raises:
+            json.JSONDecodeError: 无法解析为 JSON
+        """
+        # 尝试直接解析
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # 尝试提取 ```json ... ``` 代码块
+        import re
+
+        json_block_pattern = r"```(?:json)?\s*\n?(.*?)\n?\s*```"
+        match = re.search(json_block_pattern, content, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            return json.loads(json_str)
+
+        # 尝试提取 { ... } 块
+        brace_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
+        match = re.search(brace_pattern, content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            return json.loads(json_str)
+
+        # 所有尝试都失败，抛出原始错误
+        raise json.JSONDecodeError(f"无法从内容中提取 JSON: {content[:200]}...", content, 0)

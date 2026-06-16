@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   FlaskConical,
   FileText,
+  Brain,
   Settings,
   BrainCircuit,
 } from "lucide-react";
@@ -13,6 +14,7 @@ const menuItems = [
   { path: "/", label: "首页", icon: LayoutDashboard },
   { path: "/research", label: "研究", icon: FlaskConical },
   { path: "/reports", label: "报告", icon: FileText },
+  { path: "/memory", label: "记忆", icon: Brain },
   { path: "/settings", label: "设置", icon: Settings },
 ];
 

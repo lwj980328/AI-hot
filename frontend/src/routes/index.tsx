@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DashboardPage } from "@/pages/dashboard/DashboardPage";
 import { ResearchPage } from "@/pages/research/ResearchPage";
 import { ReportListPage } from "@/pages/reports/ReportListPage";
+import { MemoryCenterPage } from "@/pages/memory/MemoryCenterPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 
 /** 路由配置 */
@@ -22,6 +23,10 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         element: <ReportListPage />,
+      },
+      {
+        path: "memory",
+        element: <MemoryCenterPage />,
       },
       {
         path: "settings",
