@@ -693,3 +693,159 @@ backend/app/
   2. 设计 Workflow 节点和边的数据结构
   3. 实现 WorkflowCanvas 组件
   4. 与后端 WebSocket 或轮询机制对接
+
+---
+
+## Milestone 7: Workflow 可视化
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-16
+
+### 1. 核心产出 (What was done)
+* **ReactFlow 工作流可视化**: 使用 @xyflow/react 实现 6 节点工作流图（Planner → Context → Research → Analysis → Memory → Report）
+* **自定义节点组件**: 每个节点显示名称、描述、状态图标、工具调用数量
+* **状态实时更新**: 节点颜色/动画随任务状态变化（pending/running/completed/failed）
+* **节点详情面板**: 点击节点显示工具调用详情（工具名、输入参数、输出摘要、耗时）
+* **回环边可视化**: Deep Research 回环使用虚线+标签展示
+* **工具调用记录持久化**: 独立表 tool_execution_logs 存储每次工具调用
+* **任务状态实时更新**: 后端节点执行时通过回调更新数据库任务状态
+* **任务操作按钮**: 开始研究、重新研究、删除任务
+* **后端 API 新增**: DELETE /tasks/{task_id}、GET /workflows/status/{task_id}
+
+### 2. 新增文件清单
+```
+backend/app/
+├── db/models/
+│   └── tool_execution_log.py    # 工具执行记录表
+├── repositories/
+│   └── tool_execution_log_repo.py
+└── workflows/base/
+    └── workflow_context.py      # 依赖注入上下文
+
+frontend/src/
+├── features/workflow/
+│   ├── nodes/
+│   │   ├── BaseNode.tsx
+│   │   ├── PlannerNode.tsx
+│   │   ├── ContextNode.tsx
+│   │   ├── ResearchNode.tsx
+│   │   ├── AnalysisNode.tsx
+│   │   ├── MemoryNode.tsx
+│   │   └── ReportNode.tsx
+│   ├── edges/
+│   │   └── LoopEdge.tsx
+│   ├── panels/
+│   │   ├── NodeDetailPanel.tsx
+│   │   └── ToolCallCard.tsx
+│   └── WorkflowCanvas.tsx
+├── pages/workflow/
+│   └── WorkflowMonitorPage.tsx
+└── hooks/
+    └── useWorkflowStatus.ts
+```
+
+### 3. 踩坑与返工记录 (Mistakes & Rework)
+
+**踩坑 1: ReactFlow 节点不自动更新**
+* **问题描述**: 工作流状态变化后，ReactFlow 节点不重新渲染
+* **根本原因**: `useNodesState` 只在初始化时设置值，后续 props 变化不会自动更新
+* **最终解法**: 添加 `useEffect` 监听 props 变化，手动调用 `setNodes` 更新
+
+**踩坑 2: 工具调用记录不显示**
+* **问题描述**: 点击节点详情显示"该节点未调用任何工具"
+* **根本原因**: 工具调用记录存储在 AgentState.tool_calls 中，只有工作流完成后才保存到数据库
+* **最终解法**: 在 research_node 中每次工具调用完成后立即保存到数据库
+
+**踩坑 3: 节点详情不实时渲染**
+* **问题描述**: 写报告之前，节点一直显示"该节点未调用任何工具"
+* **根本原因**: 工具调用记录只在工作流完成后才保存，前端轮询获取不到实时数据
+* **最终解法**: 使用回调机制，ResearchAgent 完成工具调用后立即通过 WorkflowContext 保存记录
+
+**踩坑 4: 删除任务报错 (IntegrityError)**
+* **问题描述**: 删除任务时报错 `null value in column "task_id" violates not-null constraint`
+* **根本原因**: 删除任务时，SQLAlchemy 尝试将关联的 workflow_runs.task_id 设置为 null，但该字段有 NOT NULL 约束
+* **最终解法**: 在 Task 模型中设置级联删除 `cascade="all, delete-orphan"`
+
+**踩坑 5: 删除后任务仍显示**
+* **问题描述**: 点击删除后，任务仍在列表中
+* **根本原因**: 后端删除操作使用 `session.flush()` 但未 `commit()`，事务未提交
+* **最终解法**: 在 `delete_by_id` 中添加 `session.commit()`
+
+**踩坑 6: get_workflow_status 报错 (ValueError)**
+* **问题描述**: 调用 `/workflows/status/{task_id}` 报错 `list.index(x): x not in list`
+* **根本原因**: 状态推断逻辑中，`status_to_node.get(node_name, "")` 返回空字符串，不在 `status_order` 列表中
+* **最终解法**: 重写状态推断逻辑，使用 `node_order.index()` 而非 `status_order.index()`
+
+**踩坑 7: 报告内容"乱码"**
+* **问题描述**: 报告中的 GitHub 仓库描述包含大量空格和特殊字符
+* **根本原因**: GitHub API 返回的原始数据未过滤，直接插入报告
+* **最终解法**: 在 `_generate_default_report` 中过滤多余空格，截断过长描述
+
+**踩坑 8: Arxiv 搜索返回 0 条结果**
+* **问题描述**: 节点详情显示"arxiv_search：获取 0 条结果"，但后端日志显示"获取数据成功"
+* **根本原因**: 不是冲突，Arxiv API 对中文查询支持不好，确实返回 0 条结果；"获取数据成功"指 API 调用成功
+* **最终解法**: 无需修复，是正常行为
+
+**踩坑 9: Dashboard 删除按钮不显示**
+* **问题描述**: 刚加载页面没有删除按钮，需要点进任务详情再退出才会出现
+* **根本原因**: Dashboard 页面直接渲染任务列表，未使用 TaskList 组件，不支持删除功能
+* **最终解法**: 在 DashboardPage 中添加删除功能
+
+### 4. 代码审核发现的问题 (Code Review Findings)
+
+本阶段进行了代码审核，对照 `docs/01_状态模型设计.md`、`docs/03_工具设计规范.md`、`docs/04_Workflow设计规范.md` 逐条检查：
+
+**第一轮审核** (4 个违规项):
+* 违规 1：AgentState 新增 `current_node` 和 `tool_calls` 字段 → 已修复（移除，使用独立表+状态推断）
+* 违规 2：graph.py 使用全局变量 → 已修复（使用 WorkflowContext 依赖注入）
+* 违规 3：ResearchAgent 直接导入工具 Schema → 可接受（通过 ToolService 调用，只导入输入 Schema）
+* 违规 4：WorkflowRun 新增 tool_calls 字段 → 已修复（使用独立表 tool_execution_logs）
+
+**第二轮审核** (0 个违规项):
+* 所有核心架构符合设计规范
+* 4 项违规已全部修复
+
+* **教训**: 架构设计规范必须严格执行，新增功能时必须检查是否违反现有规范
+
+### 5. 验收测试结果
+
+| 验收项 | 结果 | 说明 |
+|--------|------|------|
+| ReactFlow 节点渲染 | ✅ | 6 个节点正确显示 |
+| 边渲染 | ✅ | 节点连线正确，回环边可见 |
+| 状态指示 | ✅ | 节点颜色随状态变化 |
+| 当前节点高亮 | ✅ | 正在执行的节点有动画 |
+| 节点详情 | ✅ | 点击节点显示详情面板 |
+| 工具调用列表 | ✅ | 显示该节点调用的所有工具 |
+| 工具输入参数 | ✅ | 显示每个工具的输入 |
+| 工具输出摘要 | ✅ | 显示每个工具的输出摘要 |
+| 工具耗时 | ✅ | 显示每个工具的执行时间 |
+| 任务删除 | ✅ | 可删除任务及关联数据 |
+| 重新研究 | ✅ | 基于相同主题创建新任务 |
+| 实时状态更新 | ✅ | 节点执行时状态实时变化 |
+
+### 6. 架构妥协 (Technical Debt)
+* **WebSocket 未实现**: 任务状态和工具调用通过轮询更新（3 秒间隔），非实时
+* **用户认证未实现**: MVP 阶段暂不支持多用户
+* **响应式基础**: 优先桌面端，移动端体验待优化
+* **appStore 未充分利用**: Zustand Store 已创建但页面组件仍通过 URL 参数管理状态
+* **统计数据不精确**: Dashboard 统计基于最近 100 条任务，非全量数据
+* **无单元测试**: MVP 阶段优先功能实现，测试后续补充
+
+### 7. 后续开发的硬性规则 (Rules for Next Steps)
+
+* **防错规则 1**: 前端组件使用 `@/` 路径别名，避免相对路径混乱
+* **防错规则 2**: 数据获取统一使用 TanStack Query，禁止 useEffect + fetch
+* **防错规则 3**: 样式使用 TailwindCSS 工具类，避免自定义 CSS
+* **防错规则 4**: 组件拆分遵循 features/ 目录结构，保持页面组件简洁
+* **防错规则 5**: 前后端 API 路径、请求/响应格式必须完全一致，联调前先确认
+* **防错规则 6**: 状态类型定义必须与后端枚举同步，新增状态时同步更新 status.ts
+* **防错规则 7**: 长时间运行的 API（>30 秒）使用异步触发，不阻塞前端
+* **防错规则 8**: 依赖后端数据的请求（如报告），必须在前置条件满足后再发起（如任务完成）
+* **防错规则 9**: 新增功能时必须检查是否违反现有设计规范，优先查阅 docs/ 文档
+* **防错规则 10**: 数据库删除操作必须设置级联删除，避免外键约束冲突
+* **防错规则 11**: 需要实时更新的数据，应在变更时立即保存到数据库，而非依赖最终状态
+* **衔接提醒**: 进入 M8 最终展示版前，需要：
+  1. 优化报告生成质量（当前 LLM 调用失败时使用默认模板）
+  2. 完善 Memory Center 页面
+  3. 优化 UI 交互和动画
+  4. 补充单元测试

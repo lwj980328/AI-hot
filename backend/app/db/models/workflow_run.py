@@ -13,7 +13,7 @@ class WorkflowRun(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tasks.id"), nullable=False
+        String(36), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
     )
     run_number: Mapped[int] = mapped_column(Integer, default=1)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual")
@@ -26,3 +26,6 @@ class WorkflowRun(Base):
 
     # 关系
     task: Mapped["Task"] = relationship(back_populates="workflow_runs")
+    tool_logs: Mapped[list["ToolExecutionLog"]] = relationship(
+        back_populates="workflow_run", cascade="all, delete-orphan"
+    )

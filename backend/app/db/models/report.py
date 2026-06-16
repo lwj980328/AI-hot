@@ -13,7 +13,7 @@ class Report(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     task_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tasks.id"), nullable=False, unique=True
+        String(36), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     summary: Mapped[str] = mapped_column(Text, default="")

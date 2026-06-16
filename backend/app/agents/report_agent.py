@@ -156,8 +156,10 @@ class ReportAgent:
         papers_section = "\n".join(
             f"### {p.title}\n{p.summary}\n" for p in state.research.papers
         )
+        # 过滤仓库描述中的多余空格，截断过长的描述
         repos_section = "\n".join(
-            f"### {r.title}\n{r.summary}\nStars: {r.stars}\n" for r in state.research.repositories
+            f"### {r.title}\n{r.summary.strip()[:200] if r.summary else '无描述'}\nStars: {r.stars}\n"
+            for r in state.research.repositories
         )
 
         # 分析结果

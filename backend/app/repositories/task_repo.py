@@ -17,3 +17,13 @@ class TaskRepository(BaseRepository[Task]):
             task.status = status
             await self.session.flush()
         return task
+
+    async def delete_by_id(self, task_id: str) -> bool:
+        """删除任务"""
+        task = await self.get_by_id(task_id)
+        if task:
+            await self.session.delete(task)
+            await self.session.flush()
+            await self.session.commit()  # 显式提交事务
+            return True
+        return False

@@ -1,7 +1,8 @@
-import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useTasks, useTask } from "@/hooks/useTasks";
-import { useRunWorkflow, useWorkflowRuns } from "@/hooks/useWorkflows";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTasks, useTask, useCreateTask, useDeleteTask } from "@/hooks/useTasks";
+import { useRunWorkflow } from "@/hooks/useWorkflows";
+import { useWorkflowStatus } from "@/hooks/useWorkflowStatus";
 import { useReportByTask } from "@/hooks/useReports";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { TaskForm } from "@/features/research/TaskForm";
 import { TaskList } from "@/features/research/TaskList";
+import { WorkflowCanvas } from "@/features/workflow/WorkflowCanvas";
 import { formatDateTime } from "@/utils/format";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,31 +18,62 @@ import {
   FileText,
   ArrowLeft,
   FlaskConical,
+  GitBranch,
+  Play,
+  RefreshCw,
 } from "lucide-react";
 
 /** Research 页面 */
 export function ResearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const activeTaskId = searchParams.get("task");
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const { data: tasks, isLoading: tasksLoading } = useTasks(50);
   const { data: activeTask } = useTask(activeTaskId || "");
-  const { data: workflowRuns } = useWorkflowRuns(activeTaskId || "");
+  const { data: workflowStatus } = useWorkflowStatus(activeTaskId || "");
   // 只在任务完成后才请求报告
   const { data: report, isLoading: reportLoading } = useReportByTask(
     activeTask?.status === "completed" ? activeTaskId || "" : ""
   );
   const runWorkflow = useRunWorkflow();
-
-  // 如果任务状态是 created 且没有运行记录，自动触发工作流
-  useEffect(() => {
-    if (activeTask?.status === "created" && workflowRuns && workflowRuns.length === 0 && !runWorkflow.isPending) {
-      runWorkflow.mutate({ task_id: activeTaskId! });
-    }
-  }, [activeTask?.status, workflowRuns, activeTaskId]);
+  const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
 
   const handleBack = () => {
     setSearchParams({});
+  };
+
+  // 删除任务
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm("确定要删除这个任务吗？")) return;
+    setDeletingTaskId(taskId);
+    try {
+      await deleteTask.mutateAsync(taskId);
+      // 如果删除的是当前选中的任务，清除选中
+      if (activeTaskId === taskId) {
+        handleBack();
+      }
+    } catch (error) {
+      console.error("删除任务失败:", error);
+    } finally {
+      setDeletingTaskId(null);
+    }
+  };
+
+  // 重新研究
+  const handleRerun = async () => {
+    if (!activeTask) return;
+    try {
+      const newTask = await createTask.mutateAsync({
+        user_query: activeTask.user_query,
+        task_name: activeTask.task_name,
+      });
+      navigate(`/research?task=${newTask.id}`, { replace: true });
+    } catch (error) {
+      console.error("创建任务失败:", error);
+    }
   };
 
   // 任务详情视图
@@ -73,19 +106,72 @@ export function ResearchPage() {
           </CardContent>
         </Card>
 
-        {/* 运行中状态 - 包括所有中间状态 */}
-        {["created", "planning", "context_loading", "researching", "analyzing", "memory_updating", "reporting"].includes(activeTask.status) && (
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <LoadingSpinner />
-                <div>
-                  <p className="font-medium">工作流运行中...</p>
-                  <p className="text-sm text-muted-foreground">
-                    当前阶段：<StatusBadge status={activeTask.status} />
-                  </p>
+        {/* 操作按钮区域 */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              {/* 未完成的任务：继续完成按钮 */}
+              {activeTask.status === "created" && (
+                <Button
+                  onClick={() => runWorkflow.mutate({ task_id: activeTaskId! })}
+                  disabled={runWorkflow.isPending}
+                >
+                  {runWorkflow.isPending ? (
+                    <>
+                      <LoadingSpinner className="mr-2 h-4 w-4" />
+                      启动中...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      开始研究
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {/* 运行中的任务：显示状态 */}
+              {["planning", "context_loading", "researching", "analyzing", "memory_updating", "reporting"].includes(activeTask.status) && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <LoadingSpinner className="h-4 w-4" />
+                  <span>工作流执行中...</span>
                 </div>
-              </div>
+              )}
+
+              {/* 已完成或失败的任务：重新研究按钮 */}
+              {["completed", "failed"].includes(activeTask.status) && (
+                <Button onClick={handleRerun} disabled={createTask.isPending}>
+                  {createTask.isPending ? (
+                    <>
+                      <LoadingSpinner className="mr-2 h-4 w-4" />
+                      创建中...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      重新研究
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 工作流可视化 */}
+        {workflowStatus && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                工作流执行状态
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WorkflowCanvas
+                nodeStates={workflowStatus.node_states}
+                toolCalls={workflowStatus.tool_calls || []}
+              />
             </CardContent>
           </Card>
         )}
@@ -154,7 +240,12 @@ export function ResearchPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TaskList tasks={tasks || []} isLoading={tasksLoading} />
+          <TaskList
+            tasks={tasks || []}
+            isLoading={tasksLoading}
+            onDelete={handleDeleteTask}
+            deletingId={deletingTaskId}
+          />
         </CardContent>
       </Card>
     </div>

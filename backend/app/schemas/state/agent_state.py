@@ -30,7 +30,11 @@ class ErrorInfo(BaseModel):
 
 
 class AgentState(BaseModel):
-    """系统唯一状态载体"""
+    """系统唯一状态载体
+
+    遵循 01_状态模型设计.md 规范，只包含规范定义的字段。
+    工具调用记录存储在独立的 tool_execution_logs 表中。
+    """
     task_id: str = ""
     user_query: str = ""
     status: TaskStatus = TaskStatus.CREATED

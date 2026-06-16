@@ -7,10 +7,12 @@ import type { Task } from "@/types/task";
 interface TaskListProps {
   tasks: Task[];
   isLoading: boolean;
+  onDelete?: (taskId: string) => void;
+  deletingId?: string | null;
 }
 
 /** 任务列表组件 */
-export function TaskList({ tasks, isLoading }: TaskListProps) {
+export function TaskList({ tasks, isLoading, onDelete, deletingId }: TaskListProps) {
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
@@ -32,7 +34,12 @@ export function TaskList({ tasks, isLoading }: TaskListProps) {
   return (
     <div className="space-y-3">
       {tasks.map((task) => (
-        <TaskCard key={task.id} task={task} />
+        <TaskCard
+          key={task.id}
+          task={task}
+          onDelete={onDelete}
+          isDeleting={deletingId === task.id}
+        />
       ))}
     </div>
   );

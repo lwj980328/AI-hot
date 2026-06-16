@@ -23,6 +23,10 @@ class Task(Base):
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 
-    # 关系
-    workflow_runs: Mapped[list["WorkflowRun"]] = relationship(back_populates="task")
-    report: Mapped["Report | None"] = relationship(back_populates="task")
+    # 关系 - 设置级联删除，删除任务时自动删除关联的 workflow_runs 和 report
+    workflow_runs: Mapped[list["WorkflowRun"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+    report: Mapped["Report | None"] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )

@@ -44,3 +44,11 @@ class TaskService:
         if not task:
             raise NotFoundError("Task", task_id)
         return TaskDTO.model_validate(task)
+
+    async def delete_task(self, task_id: str) -> bool:
+        """删除任务"""
+        logger.info(f"删除任务: {task_id}")
+        deleted = await self.repo.delete_by_id(task_id)
+        if not deleted:
+            raise NotFoundError("Task", task_id)
+        return True

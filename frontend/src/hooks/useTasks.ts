@@ -45,3 +45,16 @@ export function useCreateTask() {
     },
   });
 }
+
+/** 删除任务 Hook */
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (taskId: string) => taskApi.delete(taskId),
+    onSuccess: () => {
+      // 删除成功后刷新任务列表
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+}

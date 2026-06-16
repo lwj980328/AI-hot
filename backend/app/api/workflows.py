@@ -35,3 +35,20 @@ async def get_workflow_runs(
     service = WorkflowService(session)
     runs = await service.get_runs_by_task(task_id)
     return ApiResponse.ok(runs)
+
+
+@router.get("/status/{task_id}")
+async def get_workflow_status(
+    task_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """获取工作流执行状态（M7 新增）
+
+    返回当前节点、各节点状态等信息，用于前端 Workflow 可视化。
+    """
+    try:
+        service = WorkflowService(session)
+        status = await service.get_workflow_status(task_id)
+        return ApiResponse.ok(status)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))

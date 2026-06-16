@@ -7,10 +7,15 @@
 
 M4改造：接入 ToolService 调用真实工具（Arxiv/GitHub/HuggingFace），
 失败时降级到 LLM 模拟数据，并在 data_source_tags 中标记数据来源。
+
+M8重构：移除对 state.tool_calls 的直接操作，
+工具调用记录通过 _tool_calls_data 属性传递给节点函数，
+由节点函数负责保存到独立的 tool_execution_logs 表。
 """
 
 import logging
 from datetime import datetime
+from pydantic import BaseModel
 from app.schemas.state.agent_state import AgentState, TaskStatus
 from app.schemas.records.paper_record import PaperRecord
 from app.schemas.records.repository_record import RepositoryRecord
@@ -49,9 +54,10 @@ class ResearchAgent:
     async def run(self, state: AgentState) -> AgentState:
         """执行研究任务
 
-        1. 遍历 data_sources，按数据源调用对应工具
+        1. 遍历 data_sources，按数据源调用工具
         2. 工具失败时降级到 LLM 模拟数据
         3. 在 data_source_tags 中标记每个数据源的真实/模拟状态
+        4. 收集工具调用记录，通过 _tool_calls_data 属性传递
         """
         state.status = TaskStatus.RESEARCHING
         state.research.search_round += 1
@@ -66,6 +72,7 @@ class ResearchAgent:
             query_keyword += " " + " ".join(state.research.information_gaps[:2])
 
         source_tags: list[str] = []
+        tool_calls_data: list[dict] = []  # 收集工具调用记录
 
         # ============================================================
         # 第一步：按 data_sources 调用真实工具
@@ -77,11 +84,14 @@ class ResearchAgent:
                 continue
 
             try:
-                result = await self._invoke_tool(tool_name, query_keyword)
+                result, call_record = await self._invoke_tool(tool_name, query_keyword)
 
                 # 将工具输出追加到 state.research
                 self._merge_tool_result(state, tool_name, result)
                 source_tags.append("real")
+
+                # 收集工具调用记录
+                tool_calls_data.append(call_record)
 
                 logger.info(f"ResearchAgent: {tool_name} 获取数据成功")
 
@@ -101,32 +111,74 @@ class ResearchAgent:
         # 标记数据来源
         state.research.data_source_tags = source_tags
 
+        # 将工具调用记录附加到 state 上，供节点函数读取
+        # 注意：这不是 AgentState 的正式字段，只是一个临时传递机制
+        state._tool_calls_data = tool_calls_data
+
         return state
 
-    async def _invoke_tool(self, tool_name: str, keyword: str) -> BaseModel:
-        """调用指定工具"""
-        if tool_name == "arxiv_search":
-            from app.tools.arxiv.schemas import ArxivSearchInput
-            return await self.tool_service.execute(
-                tool_name, ArxivSearchInput(keyword=keyword)
-            )
-        elif tool_name == "github_search":
-            from app.tools.github.schemas import GithubSearchInput
-            return await self.tool_service.execute(
-                tool_name, GithubSearchInput(keyword=keyword)
-            )
-        elif tool_name == "huggingface_search":
-            from app.tools.huggingface.schemas import HuggingFaceSearchInput
-            return await self.tool_service.execute(
-                tool_name, HuggingFaceSearchInput(keyword=keyword)
-            )
-        elif tool_name == "web_search":
-            from app.tools.web.schemas import WebSearchInput
-            return await self.tool_service.execute(
-                tool_name, WebSearchInput(keyword=keyword)
-            )
-        else:
-            raise ValueError(f"未实现的工具: {tool_name}")
+    async def _invoke_tool(self, tool_name: str, keyword: str) -> tuple[BaseModel, dict]:
+        """调用指定工具，返回 (结果, 调用记录)"""
+        start_time = datetime.now()
+        input_params = {"keyword": keyword}
+
+        try:
+            if tool_name == "arxiv_search":
+                from app.tools.arxiv.schemas import ArxivSearchInput
+                result = await self.tool_service.execute(
+                    tool_name, ArxivSearchInput(keyword=keyword)
+                )
+            elif tool_name == "github_search":
+                from app.tools.github.schemas import GithubSearchInput
+                result = await self.tool_service.execute(
+                    tool_name, GithubSearchInput(keyword=keyword)
+                )
+            elif tool_name == "huggingface_search":
+                from app.tools.huggingface.schemas import HuggingFaceSearchInput
+                result = await self.tool_service.execute(
+                    tool_name, HuggingFaceSearchInput(keyword=keyword)
+                )
+            elif tool_name == "web_search":
+                from app.tools.web.schemas import WebSearchInput
+                result = await self.tool_service.execute(
+                    tool_name, WebSearchInput(keyword=keyword)
+                )
+            else:
+                raise ValueError(f"未实现的工具: {tool_name}")
+
+            # 计算耗时
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+
+            # 构建输出摘要
+            result_count = len(result.results) if hasattr(result, "results") else 0
+            output_summary = f"获取 {result_count} 条结果"
+
+            # 构建调用记录
+            call_record = {
+                "node_name": "research",
+                "tool_name": tool_name,
+                "input_params": input_params,
+                "output_summary": output_summary,
+                "success": True,
+                "duration_ms": duration_ms,
+                "called_at": start_time.isoformat(),
+            }
+
+            return result, call_record
+
+        except Exception as e:
+            # 记录失败的工具调用
+            duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            call_record = {
+                "node_name": "research",
+                "tool_name": tool_name,
+                "input_params": input_params,
+                "output_summary": f"调用失败: {str(e)}",
+                "success": False,
+                "duration_ms": duration_ms,
+                "called_at": start_time.isoformat(),
+            }
+            raise
 
     def _merge_tool_result(self, state: AgentState, tool_name: str, result: BaseModel) -> None:
         """将工具输出转换并追加到 state.research"""

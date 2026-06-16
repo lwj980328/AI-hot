@@ -51,3 +51,17 @@ async def get_task(
         return ApiResponse.ok(task)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{task_id}")
+async def delete_task(
+    task_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """删除任务"""
+    try:
+        service = TaskService(session)
+        await service.delete_task(task_id)
+        return ApiResponse.ok(None, message="任务已删除")
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))

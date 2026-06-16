@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/research": "研究工作台",
+  "/workflow": "Workflow Monitor",
   "/reports": "研究报告",
   "/settings": "设置",
 };

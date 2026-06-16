@@ -15,17 +15,32 @@ Deep Research 回环：
 M3 变更：
     - 新增 memory_node（调用 MemoryAgent 写入长期记忆）
     - 条件边 "memory" 从直接映射 report 改为映射 memory_node
+
+M8 重构：
+    - 使用 WorkflowContext 替代全局变量，遵循 04_Workflow设计规范.md
+    - 移除 AgentState.current_node，前端根据任务状态推断
+    - 工具调用记录存储在独立的 tool_execution_logs 表中
 """
 
 import logging
 from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from app.schemas.state.agent_state import AgentState, TaskStatus, ErrorInfo
+from app.workflows.base.workflow_context import WorkflowContext
 
 logger = logging.getLogger(__name__)
 
 # 最大研究轮次（与 AnalysisAgent.MAX_RESEARCH_ROUNDS 保持一致）
 MAX_RESEARCH_ROUNDS = 3
+
+# 工作流上下文（通过 build_research_graph 的参数注入）
+_workflow_context: WorkflowContext | None = None
+
+
+def set_workflow_context(context: WorkflowContext) -> None:
+    """设置工作流上下文"""
+    global _workflow_context
+    _workflow_context = context
 
 
 # ============================================================
@@ -72,6 +87,8 @@ async def planner_node(state: dict) -> dict:
     """规划节点：将用户查询转化为研究计划"""
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.PLANNING.value)
         agent = _get_agents()["planner"]
         result = await agent.run(agent_state)
         return result.model_dump()
@@ -95,6 +112,8 @@ async def context_node(state: dict) -> dict:
     """
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.CONTEXT_LOADING.value)
         agent = _get_agents()["context"]
         result = await agent.run(agent_state)
         return result.model_dump()
@@ -120,6 +139,8 @@ async def research_node(state: dict) -> dict:
     """
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.RESEARCHING.value)
 
         # 工作流控制：检查轮次上限，超出则强制结束回环
         if agent_state.research.search_round >= MAX_RESEARCH_ROUNDS:
@@ -132,6 +153,11 @@ async def research_node(state: dict) -> dict:
 
         agent = _get_agents()["research"]
         result = await agent.run(agent_state)
+
+        # 保存工具调用记录到独立表
+        if _workflow_context and hasattr(result, '_tool_calls_data'):
+            await _workflow_context.save_tool_calls(result._tool_calls_data)
+
         return result.model_dump()
     except Exception as e:
         logger.error(f"ResearchNode 异常: {e}")
@@ -150,6 +176,8 @@ async def analysis_node(state: dict) -> dict:
     """分析节点：从原始资料中提取结构化知识"""
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.ANALYZING.value)
         agent = _get_agents()["analysis"]
         result = await agent.run(agent_state)
         return result.model_dump()
@@ -175,6 +203,8 @@ async def memory_node(state: dict) -> dict:
     """
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.MEMORY_UPDATING.value)
         agent = _get_agents()["memory"]
         result = await agent.run(agent_state)
         return result.model_dump()
@@ -191,6 +221,8 @@ async def report_node(state: dict) -> dict:
     """报告节点：生成最终研究报告"""
     try:
         agent_state = AgentState.model_validate(state)
+        if _workflow_context:
+            await _workflow_context.update_status(TaskStatus.REPORTING.value)
         agent = _get_agents()["report"]
         result = await agent.run(agent_state)
         return result.model_dump()

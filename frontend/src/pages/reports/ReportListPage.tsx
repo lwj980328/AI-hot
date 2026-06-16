@@ -1,22 +1,38 @@
 import { useState } from "react";
-import { useTasks } from "@/hooks/useTasks";
+import { useTasks, useDeleteTask } from "@/hooks/useTasks";
 import { useReportByTask } from "@/hooks/useReports";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ReportViewer } from "@/features/reports/ReportViewer";
 import { formatRelativeTime } from "@/utils/format";
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import type { Task } from "@/types/task";
 
 /** 报告列表页面 */
 export function ReportListPage() {
   const { data: tasks, isLoading: tasksLoading } = useTasks(50);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const deleteTask = useDeleteTask();
 
   // 只显示已完成的任务（有报告）
   const completedTasks = tasks?.filter((t) => t.status === "completed") || [];
+
+  // 删除任务
+  const handleDelete = async (taskId: string) => {
+    if (!confirm("确定要删除这个任务和报告吗？")) return;
+    try {
+      await deleteTask.mutateAsync(taskId);
+      // 如果删除的是当前选中的任务，清除选中
+      if (selectedTask?.id === taskId) {
+        setSelectedTask(null);
+      }
+    } catch (error) {
+      console.error("删除任务失败:", error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -72,10 +88,27 @@ export function ReportListPage() {
         {/* 右侧：报告内容 */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              {selectedTask ? selectedTask.task_name : "报告预览"}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                {selectedTask ? selectedTask.task_name : "报告预览"}
+              </CardTitle>
+              {selectedTask && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(selectedTask.id)}
+                  disabled={deleteTask.isPending}
+                >
+                  {deleteTask.isPending ? (
+                    <LoadingSpinner className="h-4 w-4" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  <span className="ml-2">删除</span>
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {selectedTask ? (

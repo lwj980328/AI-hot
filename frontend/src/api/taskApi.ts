@@ -22,4 +22,9 @@ export const taskApi = {
     const { data } = await apiClient.get<Task>(`/tasks/${taskId}`);
     return data;
   },
+
+  /** 删除任务 */
+  delete: async (taskId: string): Promise<void> => {
+    await apiClient.delete(`/tasks/${taskId}`);
+  },
 };

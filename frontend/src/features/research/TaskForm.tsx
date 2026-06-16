@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCreateTask } from "@/hooks/useTasks";
-import { useRunWorkflow } from "@/hooks/useWorkflows";
 import { Loader2, Search } from "lucide-react";
 
 /** 任务创建表单 */
@@ -12,7 +11,6 @@ export function TaskForm() {
   const navigate = useNavigate();
 
   const createTask = useCreateTask();
-  const runWorkflow = useRunWorkflow();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,18 +23,14 @@ export function TaskForm() {
         task_name: query,
       });
 
-      // 异步触发工作流（不等待结果）
-      runWorkflow.mutate({ task_id: task.id });
-
-      // 立即跳转到研究页面（不等待工作流完成）
-      // 使用 replace 防止用户返回到表单页面
+      // 跳转到研究页面（不自动触发工作流，由用户手动触发）
       navigate(`/research?task=${task.id}`, { replace: true });
     } catch (error) {
       console.error("创建任务失败:", error);
     }
   };
 
-  const isLoading = createTask.isPending || runWorkflow.isPending;
+  const isLoading = createTask.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2">
