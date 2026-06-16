@@ -2,7 +2,7 @@
 
 职责：
 - 保存记忆（ResearchMemory / TrendSnapshot / InsightMemory）
-- 检索记忆（语义搜索）
+- 检索记忆（语义搜索 + Rerank）
 - 查询主题历史
 - 去重与污染控制
 
@@ -50,7 +50,16 @@ class MemoryService:
             cls._instance = super().__new__(cls)
             cls._instance.embedding = EmbeddingService()
             cls._instance.store = QdrantStore()
+            cls._instance._llm_service = None  # 延迟初始化
         return cls._instance
+
+    @property
+    def llm_service(self):
+        """延迟初始化 LLMService，避免循环依赖"""
+        if self._llm_service is None:
+            from app.services.llm_service import LLMService
+            self._llm_service = LLMService()
+        return self._llm_service
 
     async def init(self) -> None:
         """初始化：确保 Collection 存在"""
@@ -169,39 +178,51 @@ class MemoryService:
         query: str,
         topic: str | None = None,
         limit: int = 5,
+        enable_rerank: bool = False,
     ) -> dict[str, list[dict]]:
         """语义搜索记忆
 
         跨三个 Collection 搜索，返回分类结果。
+        支持可选的 LLM Rerank 以提升召回质量。
 
         Args:
             query: 搜索文本
             topic: 可选，按主题过滤
             limit: 每个 Collection 返回数量上限
+            enable_rerank: 是否启用 LLM Rerank（默认关闭，节省 token）
 
         Returns:
             {"research": [...], "trend": [...], "insight": [...]}
         """
         vector = await self.embedding.embed(query)
 
+        # 获取更多结果用于 rerank
+        rerank_limit = limit * 3 if enable_rerank else limit
+
         research_results = await self.store.search(
             collection=COLLECTION_RESEARCH,
             vector=vector,
-            limit=limit,
+            limit=rerank_limit,
             topic_filter=topic,
         )
         trend_results = await self.store.search(
             collection=COLLECTION_TREND,
             vector=vector,
-            limit=limit,
+            limit=rerank_limit,
             topic_filter=topic,
         )
         insight_results = await self.store.search(
             collection=COLLECTION_INSIGHT,
             vector=vector,
-            limit=limit,
+            limit=rerank_limit,
             topic_filter=topic,
         )
+
+        # 可选：LLM Rerank
+        if enable_rerank:
+            research_results = await self._rerank(query, research_results, limit)
+            trend_results = await self._rerank(query, trend_results, limit)
+            insight_results = await self._rerank(query, insight_results, limit)
 
         logger.info(
             f"记忆检索: query='{query}', "
@@ -215,6 +236,59 @@ class MemoryService:
             "trend": trend_results,
             "insight": insight_results,
         }
+
+    async def _rerank(
+        self, query: str, results: list[dict], limit: int
+    ) -> list[dict]:
+        """使用 LLM 对搜索结果进行重排序
+
+        Args:
+            query: 原始查询
+            results: 向量搜索结果
+            limit: 返回数量上限
+
+        Returns:
+            重排序后的结果
+        """
+        if not results:
+            return []
+
+        # 构建 rerank prompt
+        items_text = []
+        for i, r in enumerate(results):
+            payload = r.get("payload", {})
+            title = payload.get("title", payload.get("insight_title", ""))
+            summary = payload.get("summary", payload.get("insight_description", ""))
+            items_text.append(f"[{i}] {title}: {summary}")
+
+        items_str = "\n".join(items_text)
+
+        prompt = f"""请根据查询相关性对以下记忆条目进行排序。
+
+查询：{query}
+
+记忆条目：
+{items_str}
+
+请返回 JSON 格式，包含排序后的索引列表（从最相关到最不相关）：
+{{"sorted_indices": [2, 0, 1, ...]}}
+
+只返回 JSON，不要其他文字。"""
+
+        try:
+            data = await self.llm_service.chat_json(prompt, temperature=0.1)
+            sorted_indices = data.get("sorted_indices", list(range(len(results))))
+
+            # 验证索引有效性
+            valid_indices = [i for i in sorted_indices if 0 <= i < len(results)]
+            reranked = [results[i] for i in valid_indices[:limit]]
+
+            logger.info(f"Rerank 完成: {len(results)} -> {len(reranked)}")
+            return reranked
+
+        except Exception as e:
+            logger.warning(f"Rerank 失败，使用原始排序: {e}")
+            return results[:limit]
 
     async def get_topic_history(self, topic: str) -> list[TrendSnapshot]:
         """获取某主题的历史趋势数据

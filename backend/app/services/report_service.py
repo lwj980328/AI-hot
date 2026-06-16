@@ -11,6 +11,7 @@ class ReportService:
     """研究报告服务"""
 
     def __init__(self, session: AsyncSession):
+        self.session = session
         self.repo = ReportRepository(session)
 
     async def get_report(self, report_id: str) -> ReportDTO:

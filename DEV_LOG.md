@@ -1011,3 +1011,181 @@ frontend/src/
 * **防错规则 8**: 记忆搜索不使用 topic 精确过滤，依赖语义搜索
 * **架构红线 1**: Memory API 通过 MemoryService 访问 Qdrant，禁止直接操作
 * **架构红线 2**: 前端数据获取统一使用 TanStack Query，禁止 useEffect + fetch
+
+---
+
+## 遗留问题汇总及解决
+**状态:** 🟢 已完成
+**完成日期:** 2026-06-16
+
+### 1. 问题清单与解决状态
+
+#### 🔴 高优先级（架构规范）
+
+| # | 问题 | 来源 | 状态 | 解决方案 |
+|---|------|------|------|----------|
+| 1 | Session 管理绕过 Service 层 | M1 遗留 | ✅ 已解决 | 移除 `get_db_session()` 自动 commit，Service 层显式调用 `session.commit()` |
+| 2 | MAX_RESEARCH_ROUNDS 重复定义 | M2 遗留 | ✅ 已解决 | 统一到 `config.py`，graph.py 和 AnalysisAgent 都从 config 导入 |
+
+#### 🟡 中优先级（功能增强）
+
+| # | 问题 | 来源 | 状态 | 解决方案 |
+|---|------|------|------|----------|
+| 3 | 记忆检索无重排序 | M3 遗留 | ✅ 已解决 | 添加 LLM Rerank（可选，`enable_rerank=True` 开启） |
+| 4 | WebSearchTool 占位实现 | M4 遗留 | ✅ 已解决 | 接入 Tavily Search API（免费 1000 次/月） |
+| 5 | 统计数据不精确 | M6-M8 遗留 | ✅ 已解决 | 新增 `/api/v1/tasks/stats/overview` 接口，全量查询 |
+| 6 | appStore 未充分利用 | M6-M8 遗留 | ⏭️ 跳过 | URL 参数更适合页面状态（支持分享链接、浏览器前进/后退） |
+
+#### 🟢 低优先级（技术债/未来扩展，暂不解决）
+
+| # | 问题 | 来源 | 说明 |
+|---|------|------|------|
+| 7 | WebSocket 未实现 | M6-M8 | 当前轮询机制可接受，如需实时性再接入 |
+| 8 | 用户认证未实现 | M6-M8 | MVP 阶段不需要，生产环境再加 |
+| 9 | MCP 仅实现 STDIO 传输 | M5 | SSE 和 HTTP 传输按需实现 |
+| 10 | MCP 工具权限控制未实现 | M5 | ToolPermission 枚举暂未接入 |
+| 11 | MCP 工具监控指标未实现 | M5 | 调用次数、成功率、响应时间未记录 |
+| 12 | MCP Server 健康检查未定期执行 | M5 | 仅启动时连接，运行中不主动检测 |
+| 13 | 复杂 JSON Schema 支持不足 | M5 | 不支持 `$ref`、`oneOf`、`allOf` 等 |
+| 14 | MemoryService 未接入 ServiceContainer | M3 | 当前采用单例模式折中 |
+| 15 | Embedding 模型硬编码 | M3 | 当前 `bge-small-zh-v1.5` 够用，可配置更大模型 |
+| 16 | HuggingFaceTool 简化实现 | M4 | 仅基础模型搜索，未实现详情/推理 API |
+| 17 | 响应式基础 | M6-M8 | 优先桌面端，移动端体验待优化 |
+| 18 | 记忆数据依赖 | M8 | Memory Center 需先运行研究任务才有数据 |
+| 19 | 单元测试缺失 | M6-M8 | MVP 阶段优先功能实现 |
+
+### 2. 解决方案详情
+
+#### 问题 1: Session 管理绕过 Service 层
+
+**问题描述**: `get_db_session()` 在退出时自动 commit，绕过了 Service 层控制事务的规范。
+
+**解决方案**:
+- 移除 `get_db_session()` 中的自动 commit
+- 在每个 Service 方法中显式调用 `await self.session.commit()`
+
+**修改文件**:
+```
+backend/app/db/session.py                    # 移除自动 commit
+backend/app/services/task_service.py         # 添加 session.commit()
+backend/app/services/report_service.py       # 添加 session 属性
+backend/app/services/workflow_service.py     # 已有 commit，无需修改
+```
+
+#### 问题 2: MAX_RESEARCH_ROUNDS 重复定义
+
+**问题描述**: `graph.py` 和 `AnalysisAgent` 各自定义了 `MAX_RESEARCH_ROUNDS = 3`。
+
+**解决方案**:
+- 统一到 `config.py` 中定义 `max_research_rounds: int = 3`
+- 所有使用处从 config 导入
+
+**修改文件**:
+```
+backend/app/core/config.py                   # 添加 max_research_rounds 配置
+backend/app/agents/analysis_agent.py         # 从 config 导入
+backend/app/workflows/research/graph.py      # 从 config 导入
+```
+
+#### 问题 3: 记忆检索无重排序
+
+**问题描述**: 当前直接使用向量相似度排序，未做 rerank，召回质量有限。
+
+**解决方案**:
+- 添加 LLM Rerank 功能（可选）
+- 使用 LLM 对搜索结果进行语义重排序
+- 默认关闭，通过 `enable_rerank=True` 开启
+
+**修改文件**:
+```
+backend/app/memory/memory_service.py         # 添加 _rerank() 方法，修改 search_memories() 支持可选 rerank
+```
+
+#### 问题 4: WebSearchTool 接入 Tavily
+
+**问题描述**: WebSearchTool 为占位实现，返回空结果。
+
+**解决方案**:
+- 接入 Tavily Search API
+- 免费额度 1000 次/月，足够 MVP 使用
+- 未配置 API Key 时降级为空结果
+
+**修改文件**:
+```
+backend/app/core/config.py                   # 添加 tavily_api_key 配置
+backend/.env                                 # 添加 TAVILY_API_KEY 配置项
+backend/app/tools/web/web_search_tool.py     # 完整实现 Tavily API 调用
+```
+
+#### 问题 5: 统计数据不精确
+
+**问题描述**: Dashboard 统计基于最近 100 条任务，非全量数据。
+
+**解决方案**:
+- 新增 `/api/v1/tasks/stats/overview` 接口
+- 使用 SQL COUNT 查询全量数据
+
+**修改文件**:
+```
+backend/app/repositories/task_repo.py        # 添加 count_all、count_by_status
+backend/app/repositories/report_repo.py      # 添加 count_all
+backend/app/services/task_service.py         # 添加 get_stats()
+backend/app/schemas/api/task_response.py     # 添加 TaskStatsResponse
+backend/app/api/tasks.py                     # 添加统计接口
+```
+
+### 3. 额外完成的工作
+
+#### 工具自动发现
+
+**问题**: PlannerAgent 的 prompt 中硬编码了可用工具列表，新增工具需要修改 Agent 代码。
+
+**解决方案**:
+- PlannerAgent 从 ToolRegistry 动态获取可用工具列表
+- 自动构建 prompt，列出可用数据源
+- 新增工具只需注册，无需改 Agent 代码
+
+**修改文件**:
+```
+backend/app/agents/planner_agent.py          # 注入 ToolService，动态获取可用工具
+backend/app/workflows/research/graph.py      # 创建 PlannerAgent 时注入 ToolService
+```
+
+#### AnalysisNode Bug 修复
+
+**问题**: `_build_analysis_summary()` 访问 `state.analysis.need_more_data`，但该属性在 `ResearchState` 中。
+
+**解决方案**:
+- 修复为 `state.research.need_more_data`
+
+**修改文件**:
+```
+backend/app/workflows/research/graph.py      # 修复属性访问错误
+```
+
+### 4. 修改文件汇总
+
+**后端修改**:
+```
+backend/app/core/config.py                   # 添加 tavily_api_key、max_research_rounds
+backend/app/db/session.py                    # 移除自动 commit
+backend/app/agents/planner_agent.py          # 工具自动发现
+backend/app/agents/analysis_agent.py         # 从 config 导入 max_research_rounds
+backend/app/workflows/research/graph.py      # 从 config 导入、修复 AnalysisNode bug
+backend/app/services/task_service.py         # 添加 session.commit() 和 get_stats()
+backend/app/services/report_service.py       # 添加 session 属性
+backend/app/repositories/task_repo.py        # 添加 count_all、count_by_status
+backend/app/repositories/report_repo.py      # 添加 count_all
+backend/app/schemas/api/task_response.py     # 添加 TaskStatsResponse
+backend/app/api/tasks.py                     # 添加统计接口
+backend/app/tools/web/web_search_tool.py     # 接入 Tavily API
+backend/app/memory/memory_service.py         # 添加 LLM Rerank
+backend/.env                                 # 添加 TAVILY_API_KEY 配置项
+```
+
+### 5. 后续开发建议
+
+1. **Tavily API Key**: 需要注册 https://tavily.com 获取 API Key，填入 `.env` 的 `TAVILY_API_KEY`
+2. **前端统计接口**: 前端可调用 `/api/v1/tasks/stats/overview` 获取精确统计数据
+3. **Rerank 使用**: 默认关闭，需要高质量召回时开启 `enable_rerank=True`
+4. **工具扩展**: 新增工具只需实现 `BaseTool` 并注册到 `ToolRegistry`，PlannerAgent 自动发现

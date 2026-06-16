@@ -29,11 +29,9 @@ from datetime import datetime
 from langgraph.graph import StateGraph, START, END
 from app.schemas.state.agent_state import AgentState, TaskStatus, ErrorInfo
 from app.workflows.base.workflow_context import WorkflowContext
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
-
-# 最大研究轮次（与 AnalysisAgent.MAX_RESEARCH_ROUNDS 保持一致）
-MAX_RESEARCH_ROUNDS = 3
 
 # 工作流上下文（通过 build_research_graph 的参数注入）
 _workflow_context: WorkflowContext | None = None
@@ -70,7 +68,7 @@ def _get_agents():
     from app.tools.base.tool_service import ToolService
 
     _AGENTS_CACHE = {
-        "planner": PlannerAgent(),
+        "planner": PlannerAgent(tool_service=ToolService()),
         "context": ContextAgent(),
         "research": ResearchAgent(tool_service=ToolService()),
         "analysis": AnalysisAgent(),
@@ -121,7 +119,8 @@ def _build_analysis_summary(state: AgentState) -> str:
         "hot_topics": state.analysis.hot_topics,
         "trend_summary": state.analysis.trend_summary[:200] if state.analysis.trend_summary else "",
         "insights": [{"title": i.title, "description": i.description[:100]} for i in state.analysis.insights],
-        "need_more_data": state.analysis.need_more_data,
+        "need_more_data": state.research.need_more_data,
+        "information_gaps": state.research.information_gaps,
     }
     return json.dumps(data, ensure_ascii=False)
 
@@ -236,9 +235,10 @@ async def research_node(state: dict) -> dict:
             await _workflow_context.update_status(TaskStatus.RESEARCHING.value)
 
         # 工作流控制：检查轮次上限，超出则强制结束回环
-        if agent_state.research.search_round >= MAX_RESEARCH_ROUNDS:
+        settings = get_settings()
+        if agent_state.research.search_round >= settings.max_research_rounds:
             logger.info(
-                f"ResearchNode: 已达最大轮次 {MAX_RESEARCH_ROUNDS}，跳过研究"
+                f"ResearchNode: 已达最大轮次 {settings.max_research_rounds}，跳过研究"
             )
             agent_state.research.need_more_data = False
             agent_state.research.information_gaps = []
@@ -387,7 +387,7 @@ def continue_research(state: dict) -> str:
     """条件边：决定是否继续研究
 
     逻辑（符合 04_Workflow设计规范.md 第 5 节）：
-    - 如果 need_more_data=True 且 search_round < MAX_RESEARCH_ROUNDS → "research"
+    - 如果 need_more_data=True 且 search_round < max_research_rounds → "research"
     - 否则 → "memory"
 
     M3："memory" 映射到真正的 memory_node。
@@ -398,9 +398,10 @@ def continue_research(state: dict) -> str:
         logger.warning("检测到错误状态，跳转到记忆节点进行收尾")
         return "memory"
 
+    settings = get_settings()
     if (
         agent_state.research.need_more_data
-        and agent_state.research.search_round < MAX_RESEARCH_ROUNDS
+        and agent_state.research.search_round < settings.max_research_rounds
     ):
         logger.info(
             f"Deep Research: need_more_data=True, "

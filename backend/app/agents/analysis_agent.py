@@ -2,6 +2,7 @@ import logging
 from app.schemas.state.agent_state import AgentState, TaskStatus
 from app.schemas.state.analysis_state import AnalysisInsight, Evidence
 from app.services.llm_service import LLMService
+from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +21,18 @@ class AnalysisAgent:
     - 禁止直接访问数据库或外部服务
     """
 
-    MAX_RESEARCH_ROUNDS = 3
-
     def __init__(self, llm_service: LLMService | None = None):
         self.llm_service = llm_service or LLMService()
+        self.settings = get_settings()
 
     async def run(self, state: AgentState) -> AgentState:
         """执行分析推理"""
         state.status = TaskStatus.ANALYZING
 
         # 检查研究轮次上限
-        if state.research.search_round >= self.MAX_RESEARCH_ROUNDS:
+        if state.research.search_round >= self.settings.max_research_rounds:
             logger.info(
-                f"AnalysisAgent: 已达到最大研究轮次 {self.MAX_RESEARCH_ROUNDS}，强制结束"
+                f"AnalysisAgent: 已达到最大研究轮次 {self.settings.max_research_rounds}，强制结束"
             )
             state.research.need_more_data = False
             state.research.information_gaps = []
@@ -67,7 +67,7 @@ class AnalysisAgent:
 {repos_summary or "无"}
 
 ## 当前研究轮次
-第 {state.research.search_round + 1} 轮（最多 {self.MAX_RESEARCH_ROUNDS} 轮）
+第 {state.research.search_round + 1} 轮（最多 {self.settings.max_research_rounds} 轮）
 
 请返回JSON格式：
 {{
@@ -123,7 +123,7 @@ class AnalysisAgent:
             ]
 
             # Deep Research 回环判断（仅在未达上限时生效）
-            if state.research.search_round < self.MAX_RESEARCH_ROUNDS:
+            if state.research.search_round < self.settings.max_research_rounds:
                 need_more = data.get("need_more_data", False)
                 gaps = data.get("information_gaps", [])
                 state.research.need_more_data = need_more and len(gaps) > 0

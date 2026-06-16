@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     tool_max_retries: int = 3  # 工具调用失败最大重试次数
     arxiv_max_results: int = 10  # Arxiv 单次搜索最大返回条数
     huggingface_max_results: int = 10  # HuggingFace 单次搜索最大返回条数
+    tavily_api_key: str = ""  # Tavily 搜索 API Key
+
+    # Workflow - 工作流配置
+    max_research_rounds: int = 3  # Deep Research 最大研究轮次
 
     # App
     app_env: str = "development"

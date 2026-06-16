@@ -15,6 +15,15 @@ class TaskResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TaskStatsResponse(BaseModel):
+    """任务统计响应"""
+    total_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    running_tasks: int
+    total_reports: int
+
+
 class WorkflowRunResponse(BaseModel):
     """工作流运行响应"""
     id: str

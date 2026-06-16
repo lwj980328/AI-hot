@@ -19,11 +19,13 @@ async_session_factory = async_sessionmaker(
 
 
 async def get_db_session() -> AsyncSession:
-    """FastAPI依赖注入：获取数据库Session"""
+    """FastAPI依赖注入：获取数据库Session
+
+    注意：Session 不自动 commit，由 Service 层控制事务边界。
+    """
     async with async_session_factory() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.task import Task
 from app.repositories.base_repo import BaseRepository
@@ -27,3 +27,15 @@ class TaskRepository(BaseRepository[Task]):
             await self.session.commit()  # 显式提交事务
             return True
         return False
+
+    async def count_all(self) -> int:
+        """统计总任务数"""
+        result = await self.session.execute(select(func.count(Task.id)))
+        return result.scalar() or 0
+
+    async def count_by_status(self, status: str) -> int:
+        """按状态统计任务数"""
+        result = await self.session.execute(
+            select(func.count(Task.id)).where(Task.status == status)
+        )
+        return result.scalar() or 0

@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.report import Report
 from app.repositories.base_repo import BaseRepository
@@ -16,3 +16,8 @@ class ReportRepository(BaseRepository[Report]):
             select(Report).where(Report.task_id == task_id)
         )
         return result.scalar_one_or_none()
+
+    async def count_all(self) -> int:
+        """统计总报告数"""
+        result = await self.session.execute(select(func.count(Report.id)))
+        return result.scalar() or 0
